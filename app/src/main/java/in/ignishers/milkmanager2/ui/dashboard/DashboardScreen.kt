@@ -1,0 +1,587 @@
+package `in`.ignishers.milkmanager2.ui.dashboard
+
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import `in`.ignishers.milkmanager2.utils.dragAndDrop
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import org.koin.androidx.compose.koinViewModel
+import `in`.ignishers.milkmanager2.models.Customer
+import `in`.ignishers.milkmanager2.models.RouteGroup
+import java.math.BigDecimal
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DashboardScreen(
+    currentRouteId: Long? = null,
+    onNavigateToRoute: (Long) -> Unit,
+    onNavigateBack: () -> Unit,
+    onNavigateToPos: (Long) -> Unit,
+    onNavigateToSettings: () -> Unit,
+    viewModel: DashboardViewModel = koinViewModel()
+) {
+    val context = LocalContext.current
+    val customers by viewModel.customers.collectAsState()
+    val allRouteGroups by viewModel.routeGroups.collectAsState()
+    val totalRevenue by viewModel.totalRevenue.collectAsState()
+    val totalMilk by viewModel.totalMilk.collectAsState()
+    
+    var showAddCustomerDialog by remember { mutableStateOf(false) }
+    var customerToEdit by remember { mutableStateOf<Customer?>(null) }
+    
+    var showAddRouteDialog by remember { mutableStateOf(false) }
+    var isReorderMode by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    var showMilkPriceDialog by remember { mutableStateOf(false) }
+    
+    // Action Menu States
+    var selectedCustomerForAction by remember { mutableStateOf<Customer?>(null) }
+    var selectedRouteForAction by remember { mutableStateOf<RouteGroup?>(null) }
+    
+    var isFabExpanded by remember { mutableStateOf(false) }
+    val fabRotation by animateFloatAsState(targetValue = if (isFabExpanded) 45f else 0f)
+
+    val listState = rememberLazyListState()
+    var uiItems by remember { mutableStateOf(emptyList<Any>()) }
+
+    LaunchedEffect(allRouteGroups, customers, currentRouteId) {
+        val routes = allRouteGroups.filter { it.parentId == currentRouteId }.sortedBy { it.sortOrder ?: 0 }
+        val custs = customers.filter { it.routeGroupId == currentRouteId }.sortedBy { it.sortOrder ?: 0 }
+        uiItems = routes + custs
+    }
+    val currentRouteName = allRouteGroups.find { it.id == currentRouteId }?.name ?: "Milk Manager"
+
+    if (showAddCustomerDialog || customerToEdit != null) {
+        AddCustomerDialog(
+            initialCustomer = customerToEdit,
+            onDismiss = { 
+                showAddCustomerDialog = false
+                customerToEdit = null
+            },
+            onSave = { customer ->
+                if (customerToEdit == null) {
+                    customer.routeGroupId = currentRouteId
+                    viewModel.addCustomer(customer)
+                } else {
+                    viewModel.updateCustomer(customer)
+                }
+                showAddCustomerDialog = false
+                customerToEdit = null
+            }
+        )
+    }
+
+    if (showAddRouteDialog) {
+        AddRouteDialog(
+            parentId = currentRouteId,
+            onDismiss = { showAddRouteDialog = false },
+            onSave = { routeGroup ->
+                viewModel.addRouteGroup(routeGroup)
+                showAddRouteDialog = false
+            }
+        )
+    }
+
+    if (showMilkPriceDialog) {
+        val currentPrice = viewModel.currentMilkRate.collectAsState().value
+        UpdateMilkPriceDialog(
+            currentPrice = currentPrice?.price,
+            onDismiss = { showMilkPriceDialog = false },
+            onSave = { newRate ->
+                viewModel.saveMilkRate(newRate)
+                showMilkPriceDialog = false
+                Toast.makeText(context, "Milk Price Updated!", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    if (selectedCustomerForAction != null) {
+        ModalBottomSheet(onDismissRequest = { selectedCustomerForAction = null }) {
+            Column(modifier = Modifier.padding(bottom = 32.dp)) {
+                Text(
+                    text = "Manage ${selectedCustomerForAction?.name}",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(16.dp),
+                    fontWeight = FontWeight.Bold
+                )
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("Edit Customer") },
+                    leadingContent = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        customerToEdit = selectedCustomerForAction
+                        selectedCustomerForAction = null
+                    }
+                )
+                ListItem(
+                    headlineContent = { Text("Move to Route") },
+                    leadingContent = { Icon(Icons.Filled.ArrowForward, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        Toast.makeText(context, "Move feature coming soon", Toast.LENGTH_SHORT).show()
+                        selectedCustomerForAction = null
+                    }
+                )
+                ListItem(
+                    headlineContent = { Text("Delete Customer", color = MaterialTheme.colorScheme.error) },
+                    leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                    modifier = Modifier.clickable {
+                        val c = selectedCustomerForAction!!
+                        if (c.currentDue != null && c.currentDue!! > BigDecimal.ZERO) {
+                            Toast.makeText(context, "Cannot delete: Customer has pending due!", Toast.LENGTH_LONG).show()
+                        } else {
+                            viewModel.deleteCustomer(c)
+                        }
+                        selectedCustomerForAction = null
+                    }
+                )
+            }
+        }
+    }
+
+    if (selectedRouteForAction != null) {
+        ModalBottomSheet(onDismissRequest = { selectedRouteForAction = null }) {
+            Column(modifier = Modifier.padding(bottom = 32.dp)) {
+                Text(
+                    text = "Manage ${selectedRouteForAction?.name}",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(16.dp),
+                    fontWeight = FontWeight.Bold
+                )
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("Delete Route", color = MaterialTheme.colorScheme.error) },
+                    leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                    modifier = Modifier.clickable {
+                        val route = selectedRouteForAction!!
+                        val hasSubRoutes = allRouteGroups.any { it.parentId == route.id }
+                        val hasCustomers = customers.any { it.routeGroupId == route.id }
+                        if (hasSubRoutes || hasCustomers) {
+                            Toast.makeText(context, "Cannot delete: Route is not empty!", Toast.LENGTH_LONG).show()
+                        } else {
+                            viewModel.deleteRouteGroup(route)
+                        }
+                        selectedRouteForAction = null
+                    }
+                )
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(currentRouteName, fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    if (currentRouteId != null) {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { 
+                            if (isReorderMode) {
+                                isReorderMode = false 
+                            } else {
+                                showMenu = true
+                            }
+                        }) {
+                            Icon(if (isReorderMode) Icons.Filled.Check else Icons.Filled.MoreVert, contentDescription = "Menu")
+                        }
+                        
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Reorder List") },
+                                onClick = { 
+                                    isReorderMode = true
+                                    showMenu = false 
+                                },
+                                leadingIcon = { Icon(Icons.Filled.List, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Update Milk Price") },
+                                onClick = { 
+                                    showMilkPriceDialog = true
+                                    showMenu = false 
+                                },
+                                leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Sales Records") },
+                                onClick = { 
+                                    Toast.makeText(context, "Sales Records Coming Soon!", Toast.LENGTH_SHORT).show()
+                                    showMenu = false 
+                                },
+                                leadingIcon = { Icon(Icons.Filled.List, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Settings") },
+                                onClick = { 
+                                    onNavigateToSettings()
+                                    showMenu = false 
+                                },
+                                leadingIcon = { Icon(Icons.Filled.Settings, contentDescription = null) }
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+        },
+        floatingActionButton = {
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                AnimatedVisibility(visible = isFabExpanded) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text("New Route", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelLarge)
+                        }
+                        FloatingActionButton(
+                            onClick = { 
+                                isFabExpanded = false
+                                showAddRouteDialog = true 
+                            },
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.Filled.LocationOn, contentDescription = "Add Route")
+                        }
+                    }
+                }
+
+                AnimatedVisibility(visible = isFabExpanded) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text("New Customer", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelLarge)
+                        }
+                        FloatingActionButton(
+                            onClick = { 
+                                isFabExpanded = false
+                                showAddCustomerDialog = true 
+                            },
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(Icons.Filled.Person, contentDescription = "Add Customer")
+                        }
+                    }
+                }
+
+                FloatingActionButton(
+                    onClick = { isFabExpanded = !isFabExpanded },
+                    containerColor = MaterialTheme.colorScheme.secondary
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Add,
+                        contentDescription = "Expand",
+                        modifier = Modifier.rotate(fabRotation)
+                    )
+                }
+            }
+        }
+    ) { paddingValues ->
+        var swipeOffsetX by remember { mutableStateOf(0f) }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .pointerInput(currentRouteId) {
+                    if (currentRouteId != null) {
+                        detectHorizontalDragGestures(
+                            onDragEnd = {
+                                if (swipeOffsetX > 150f) {
+                                    onNavigateBack()
+                                }
+                                swipeOffsetX = 0f
+                            },
+                            onHorizontalDrag = { change, dragAmount ->
+                                if (dragAmount > 0) { // Only track rightward swipe
+                                    swipeOffsetX += dragAmount
+                                }
+                            }
+                        )
+                    }
+                }
+        ) {
+            
+            if (currentRouteId == null) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Total Milk", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                            Text("${totalMilk.toPlainString()} L", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Revenue", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                            Text("₹${totalRevenue.toPlainString()}", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            if (uiItems.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No entries found. Click + to add.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            } else {
+                val saveSortOrder: () -> Unit = {
+                    var routeOrder = 0
+                    var custOrder = 0
+                    uiItems.forEach { item ->
+                        if (item is RouteGroup) {
+                            if (item.sortOrder != routeOrder) viewModel.updateRouteSortOrder(item, routeOrder)
+                            routeOrder++
+                        } else if (item is Customer) {
+                            if (item.sortOrder != custOrder) viewModel.updateCustomerSortOrder(item, custOrder)
+                            custOrder++
+                        }
+                    }
+                }
+
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 80.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(uiItems.size, key = { index -> 
+                        val item = uiItems[index]
+                        if (item is RouteGroup) "r_${item.id}" else "c_${(item as Customer).id}" 
+                    }) { index ->
+                        val item = uiItems[index]
+                        val isFirstOfType = index == 0 || uiItems[index - 1]::class != item::class
+                        val isLastOfType = index == uiItems.lastIndex || uiItems[index + 1]::class != item::class
+
+                        if (item is RouteGroup) {
+                            RouteCard(
+                                routeGroup = item,
+                                isReorderMode = isReorderMode,
+                                canMoveUp = !isFirstOfType,
+                                canMoveDown = !isLastOfType,
+                                onMoveUp = {
+                                    val mutableItems = uiItems.toMutableList()
+                                    mutableItems.add(index - 1, mutableItems.removeAt(index))
+                                    uiItems = mutableItems
+                                    saveSortOrder()
+                                },
+                                onMoveDown = {
+                                    val mutableItems = uiItems.toMutableList()
+                                    mutableItems.add(index + 1, mutableItems.removeAt(index))
+                                    uiItems = mutableItems
+                                    saveSortOrder()
+                                },
+                                onClick = { if (!isReorderMode) onNavigateToRoute(item.id!!) },
+                                onLongClick = { if (!isReorderMode) selectedRouteForAction = item }
+                            )
+                        } else if (item is Customer) {
+                            CustomerCard(
+                                customer = item,
+                                isReorderMode = isReorderMode,
+                                canMoveUp = !isFirstOfType,
+                                canMoveDown = !isLastOfType,
+                                onMoveUp = {
+                                    val mutableItems = uiItems.toMutableList()
+                                    mutableItems.add(index - 1, mutableItems.removeAt(index))
+                                    uiItems = mutableItems
+                                    saveSortOrder()
+                                },
+                                onMoveDown = {
+                                    val mutableItems = uiItems.toMutableList()
+                                    mutableItems.add(index + 1, mutableItems.removeAt(index))
+                                    uiItems = mutableItems
+                                    saveSortOrder()
+                                },
+                                onClick = { if (!isReorderMode) onNavigateToPos(item.id!!) },
+                                onLongClick = { if (!isReorderMode) selectedCustomerForAction = item }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun RouteCard(
+    routeGroup: RouteGroup, 
+    isReorderMode: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onClick: () -> Unit, 
+    onLongClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.LocationOn, contentDescription = "Route", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            Spacer(modifier = Modifier.width(16.dp))
+            Text(
+                text = routeGroup.name ?: "Unnamed Route",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            
+            if (isReorderMode) {
+                Row {
+                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move Up")
+                    }
+                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move Down")
+                    }
+                }
+            } else {
+                Icon(Icons.Filled.Menu, contentDescription = "Drag Handle", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun CustomerCard(
+    customer: Customer,
+    isReorderMode: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onClick: () -> Unit, 
+    onLongClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = customer.name ?: "Unknown",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    if (!customer.mobile.isNullOrBlank()) {
+                        Text(
+                            text = customer.mobile!!,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    if (customer.currentDue != null && customer.currentDue!! > BigDecimal.ZERO) {
+                        Text(
+                            text = "Due: ₹${customer.currentDue}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            if (isReorderMode) {
+                Row {
+                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move Up")
+                    }
+                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move Down")
+                    }
+                }
+            } else {
+                Icon(Icons.Filled.Menu, contentDescription = "Drag Handle", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
