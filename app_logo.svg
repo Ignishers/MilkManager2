@@ -1,36 +1,186 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
     <defs>
-        <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" /> <!-- Indigo 600 -->
-            <stop offset="100%" style="stop-color:#312E81;stop-opacity:1" /> <!-- Indigo 900 -->
+        <!-- Background Gradient: Deep Royal Blue to Midnight Slate -->
+        <linearGradient id="c4_bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#2563EB" />   <!-- Royal Blue -->
+            <stop offset="50%" stop-color="#1E293B" />  <!-- Slate 800 -->
+            <stop offset="100%" stop-color="#0F172A" /> <!-- Midnight Black -->
         </linearGradient>
-        <filter id="materialShadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.25"/>
+
+        <!-- Frosted Glass Body Gradient -->
+        <linearGradient id="c4_glassGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32" />
+            <stop offset="45%" stop-color="#FFFFFF" stop-opacity="0.08" />
+            <stop offset="100%" stop-color="#93C5FD" stop-opacity="0.25" />
+        </linearGradient>
+
+        <!-- Crisp Glass Edge Border -->
+        <linearGradient id="c4_glassBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95" />
+            <stop offset="40%" stop-color="#FFFFFF" stop-opacity="0.3" />
+            <stop offset="100%" stop-color="#60A5FA" stop-opacity="0.7" />
+        </linearGradient>
+
+        <!-- Rich Fresh Milk Gradient -->
+        <linearGradient id="c4_milkGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FFFFFF" />
+            <stop offset="75%" stop-color="#F8FAFC" />
+            <stop offset="100%" stop-color="#E2E8F0" />
+        </linearGradient>
+
+        <!-- Premium Gold Coin Gradient -->
+        <linearGradient id="c4_coinFace" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#FDE047" /> <!-- Radiant Gold -->
+            <stop offset="40%" stop-color="#F59E0B" /> <!-- Warm Amber Gold -->
+            <stop offset="100%" stop-color="#D97706" /> <!-- Deep Rich Gold -->
+        </linearGradient>
+
+        <linearGradient id="c4_coinRim" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#FEF08A" />
+            <stop offset="100%" stop-color="#B45309" />
+        </linearGradient>
+
+        <!-- Soft Shadows for Depth -->
+        <filter id="c4_bottleShadow" x="-25%" y="-20%" width="150%" height="150%">
+            <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000000" flood-opacity="0.45" />
+            <feDropShadow dx="0" dy="4" stdDeviation="8" flood-color="#3B82F6" flood-opacity="0.2" />
         </filter>
+
+        <filter id="c4_coinShadow" x="-35%" y="-35%" width="170%" height="170%">
+            <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#050814" flood-opacity="0.75" />
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.45" />
+        </filter>
+
+        <!-- Clip path for liquid perfectly fitted inside bottle -->
+        <clipPath id="c4_bottleInnerClip">
+            <path d="M 214 135 
+                     L 298 135 
+                     L 298 172 
+                     C 298 198 332 218 332 245 
+                     L 332 382 
+                     C 332 408 312 422 286 422 
+                     L 226 422 
+                     C 200 422 180 408 180 382 
+                     L 180 245 
+                     C 180 218 214 198 214 172 
+                     Z" />
+        </clipPath>
     </defs>
 
-    <!-- Material Squircle Background -->
-    <rect x="32" y="32" width="448" height="448" rx="144" fill="url(#bgGradient)" />
+    <!-- App Icon Squircle Background -->
+    <rect x="24" y="24" width="464" height="464" rx="116" fill="url(#c4_bgGrad)" />
 
-    <!-- Material "M" constructed from Geometric Shapes -->
-    <g filter="url(#materialShadow)">
-        <!-- Left Pillar -->
-        <rect x="112" y="128" width="80" height="256" rx="40" fill="#FFFFFF"/>
+    <!-- Soft Ambient Lights -->
+    <circle cx="256" cy="280" r="145" fill="#38BDF8" opacity="0.14" />
+    <circle cx="345" cy="350" r="85" fill="#F59E0B" opacity="0.12" />
+
+    <!-- ================= BOTTLE LAYER ================= -->
+    <g filter="url(#c4_bottleShadow)">
         
-        <!-- Right Pillar -->
-        <rect x="320" y="128" width="80" height="256" rx="40" fill="#FFFFFF"/>
-        
-        <!-- Center V (Draped) -->
-        <!-- This connects the two pillars seamlessly -->
-        <path d="M152 160 
-                 Q 256 300, 360 160
-                 L 360 210
-                 Q 256 380, 152 210
-                 Z" fill="#FFFFFF"/>
-                 
-        <!-- usage of Teal (Ignishers Accent) for the 'Hidden' element -->
-        <!-- A floating diamond/spark in the top center negative space -->
-        <!-- It represents the 'Ignishers' spark/shield idea abstractly -->
-        <rect x="236" y="100" width="40" height="40" rx="8" transform="rotate(45 256 120)" fill="#2DD4BF"/>
+        <!-- Glass Body Silhouette -->
+        <path d="M 214 135 
+                 L 298 135 
+                 L 298 172 
+                 C 298 198 332 218 332 245 
+                 L 332 382 
+                 C 332 408 312 422 286 422 
+                 L 226 422 
+                 C 200 422 180 408 180 382 
+                 L 180 245 
+                 C 180 218 214 198 214 172 
+                 Z" 
+              fill="url(#c4_glassGrad)" 
+              stroke="url(#c4_glassBorder)" 
+              stroke-width="3.5" />
+
+        <!-- Bottle Cap -->
+        <rect x="208" y="110" width="96" height="25" rx="8" fill="#F1F5F9" />
+        <rect x="214" y="112" width="84" height="5" rx="2.5" fill="#FFFFFF" opacity="0.9" />
+        <rect x="208" y="128" width="96" height="7" rx="2" fill="#CBD5E1" />
+
+        <!-- Liquid Milk Inside Bottle -->
+        <g clip-path="url(#c4_bottleInnerClip)">
+            <!-- Milk Base Fill -->
+            <path d="M 175 258 
+                     Q 216 242 256 256 
+                     T 336 256 
+                     L 336 430 
+                     L 175 430 Z" 
+                  fill="url(#c4_milkGrad)" />
+
+            <!-- Cream Wave Surface Foam -->
+            <path d="M 175 258 
+                     Q 216 242 256 256 
+                     T 336 256 
+                     L 336 264 
+                     Q 296 250 256 264 
+                     T 175 264 Z" 
+                  fill="#FFFFFF" />
+
+            <!-- Bottom Curvature Shadow of milk volume -->
+            <ellipse cx="256" cy="416" rx="65" ry="9" fill="#94A3B8" opacity="0.25" />
+
+            <!-- Clean Measurement Scale Notches on Glass -->
+            <line x1="195" y1="295" x2="218" y2="295" stroke="#94A3B8" stroke-width="3" stroke-linecap="round" opacity="0.6" />
+            <line x1="195" y1="330" x2="212" y2="330" stroke="#94A3B8" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
+            <line x1="195" y1="365" x2="218" y2="365" stroke="#94A3B8" stroke-width="3" stroke-linecap="round" opacity="0.6" />
+        </g>
+
+        <!-- Glossy Highlights on Glass Surface -->
+        <!-- Left vertical light streak -->
+        <path d="M 192 245 
+                 L 192 375 
+                 C 192 392 198 404 208 408" 
+              fill="none" 
+              stroke="#FFFFFF" 
+              stroke-width="5" 
+              stroke-linecap="round" 
+              opacity="0.65" />
+
+        <!-- Right shoulder light streak -->
+        <path d="M 220 178 
+                 C 204 192 194 216 193 238" 
+              fill="none" 
+              stroke="#FFFFFF" 
+              stroke-width="4" 
+              stroke-linecap="round" 
+              opacity="0.85" />
     </g>
+
+    <!-- ================= FLOATING 3D RUPEE BADGE ================= -->
+    <!-- Positioned cleanly on bottom-right with crisp boundary and zero color bleeding -->
+    <g transform="translate(344, 340)" filter="url(#c4_coinShadow)">
+        
+        <!-- Outer Dark Contrast Shield (prevents color clash with bottle & background) -->
+        <circle cx="0" cy="0" r="54" fill="#0F172A" />
+
+        <!-- Gold Coin Outer Chamfer/Rim -->
+        <circle cx="0" cy="0" r="50" fill="url(#c4_coinRim)" />
+
+        <!-- Gold Coin Main Face -->
+        <circle cx="0" cy="0" r="44" fill="url(#c4_coinFace)" />
+
+        <!-- Inner Bevel Circle -->
+        <circle cx="0" cy="0" r="40" fill="none" stroke="#FEF08A" stroke-width="1.8" opacity="0.75" />
+        <circle cx="0" cy="0" r="37" fill="none" stroke="#92400E" stroke-width="1" stroke-dasharray="3 2" opacity="0.4" />
+
+        <!-- Official Authentic Indian Rupee Symbol (₹) - Hindi 'र' + Latin 'R' (No stem) -->
+        <!-- 3D Shadow underneath the Rupee glyph -->
+        <path d="M-17.37 -14.00H-0.99Q-1.28 -15.16 -1.94 -16.09Q-2.61 -17.03 -3.82 -17.69Q-5.02 -18.36 -6.80 -18.72Q-8.59 -19.08 -11.03 -19.08H-17.41L-17.37 -25.81H17.30V-19.08H7.54Q8.59 -18.07 9.25 -16.81Q9.92 -15.55 10.13 -14.00H17.41V-7.27H9.92Q9.49 -5.47 8.44 -3.89Q7.40 -2.30 5.80 -1.03Q4.19 0.25 2.12 1.17Q0.05 2.09 -2.43 2.56V2.70Q-1.13 3.28 -0.07 4.03Q0.99 4.79 1.98 5.80Q2.97 6.80 3.94 8.10Q4.91 9.40 6.07 11.02L16.36 25.81H4.01L-4.19 12.96Q-5.38 11.09 -6.44 9.68Q-7.51 8.28 -8.71 7.34Q-9.92 6.41 -11.38 5.92Q-12.83 5.44 -14.78 5.44H-17.37V-2.16H-11.07Q-9.23 -2.16 -7.58 -2.54Q-5.92 -2.92 -4.61 -3.60Q-3.29 -4.28 -2.38 -5.22Q-1.46 -6.16 -1.06 -7.27H-17.37Z" 
+              fill="#78350F" 
+              opacity="0.45" 
+              transform="translate(0, 2.5)" />
+
+        <!-- Crisp Pure White Glyph Face -->
+        <path d="M-17.37 -14.00H-0.99Q-1.28 -15.16 -1.94 -16.09Q-2.61 -17.03 -3.82 -17.69Q-5.02 -18.36 -6.80 -18.72Q-8.59 -19.08 -11.03 -19.08H-17.41L-17.37 -25.81H17.30V-19.08H7.54Q8.59 -18.07 9.25 -16.81Q9.92 -15.55 10.13 -14.00H17.41V-7.27H9.92Q9.49 -5.47 8.44 -3.89Q7.40 -2.30 5.80 -1.03Q4.19 0.25 2.12 1.17Q0.05 2.09 -2.43 2.56V2.70Q-1.13 3.28 -0.07 4.03Q0.99 4.79 1.98 5.80Q2.97 6.80 3.94 8.10Q4.91 9.40 6.07 11.02L16.36 25.81H4.01L-4.19 12.96Q-5.38 11.09 -6.44 9.68Q-7.51 8.28 -8.71 7.34Q-9.92 6.41 -11.38 5.92Q-12.83 5.44 -14.78 5.44H-17.37V-2.16H-11.07Q-9.23 -2.16 -7.58 -2.54Q-5.92 -2.92 -4.61 -3.60Q-3.29 -4.28 -2.38 -5.22Q-1.46 -6.16 -1.06 -7.27H-17.37Z" 
+              fill="#FFFFFF" />
+
+        <!-- Coin Specular Sparkle -->
+        <circle cx="-18" cy="-18" r="4.5" fill="#FFFFFF" opacity="0.85" />
+    </g>
+
+    <!-- Floating Crisp Droplets for Dairy Authenticity -->
+    <circle cx="145" cy="205" r="9" fill="#FFFFFF" opacity="0.9" />
+    <circle cx="132" cy="180" r="5" fill="#38BDF8" opacity="0.9" />
+    <circle cx="370" cy="170" r="6" fill="#FFFFFF" opacity="0.75" />
 </svg>
