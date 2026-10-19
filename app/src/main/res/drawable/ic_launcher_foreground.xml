@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    
+    <!-- Material M Group: Centered in 512x512 canvas -->
+    <!-- Matches ic_app_logo exactly -->
+    <group>
+         <!-- Left Pillar -->
+         <path 
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M112,168 a40,40 0 0 1 80,0 v176 a40,40 0 0 1 -80,0 z" />
+
+        <!-- Right Pillar -->
+        <path 
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M320,168 a40,40 0 0 1 80,0 v176 a40,40 0 0 1 -80,0 z" />
+
+        <!-- Center Drape -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M152 160 Q 256 300, 360 160 L 360 210 Q 256 380, 152 210 Z"/>
+
+        <!-- Spark Accent -->
+        <path
+            android:fillColor="#FF2DD4BF"
+            android:pathData="M256,92 L284,120 L256,148 L228,120 Z"/>
+    </group>
+</vector>
