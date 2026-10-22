@@ -10,11 +10,15 @@ import `in`.ignishers.milkmanager2.models.Customer
 import `in`.ignishers.milkmanager2.models.DailyTransaction
 import `in`.ignishers.milkmanager2.models.Payment
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -47,6 +51,14 @@ class PointOfSaleViewModel(
 
     val todayTransactions = MutableStateFlow<List<DailyTransaction>>(emptyList())
     val todayPayments = MutableStateFlow<List<Payment>>(emptyList())
+
+    private val _currentMonthBill = MutableStateFlow(BigDecimal.ZERO)
+    val currentMonthBill: StateFlow<BigDecimal> = _currentMonthBill
+
+    val lastMonthDue: StateFlow<BigDecimal> = combine(_customer, _currentMonthBill) { cust, bill ->
+        val total = cust?.currentDue ?: BigDecimal.ZERO
+        total.subtract(bill)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BigDecimal.ZERO)
     
     fun loadCustomer(customerId: Long) {
         launchSafe {
@@ -64,6 +76,21 @@ class PointOfSaleViewModel(
         viewModelScope.launch {
             paymentRepository.getPaymentsByDate(customerId, _currentDate.value).collect {
                 todayPayments.value = it
+            }
+        }
+        val cal = Calendar.getInstance()
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        try {
+            sdf.parse(_currentDate.value)?.let { cal.time = it }
+        } catch (_: Exception) {}
+        cal.set(Calendar.DAY_OF_MONTH, 1)
+        val startOfMonth = sdf.format(cal.time)
+        cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH))
+        val endOfMonth = sdf.format(cal.time)
+
+        viewModelScope.launch {
+            transactionDao.getCurrentMonthMilkTotalFlow(customerId, startOfMonth, endOfMonth).collect { total ->
+                _currentMonthBill.value = total ?: BigDecimal.ZERO
             }
         }
     }

@@ -68,6 +68,9 @@ interface DailyTransactionRoomDao {
 
     @Query("SELECT * FROM milk_transaction WHERE customer_id_fk = :customerId AND transaction_date BETWEEN :startDate AND :endDate ORDER BY transaction_date ASC, transaction_id ASC")
     suspend fun getTransactionsByDateRange(customerId: Long, startDate: String, endDate: String): List<DailyTransaction>
+
+    @Query("SELECT SUM(transaction_amount) FROM milk_transaction WHERE customer_id_fk = :customerId AND transaction_date >= :startDate AND transaction_date <= :endDate AND (transaction_session IS NULL OR transaction_session NOT LIKE 'Payment%')")
+    fun getCurrentMonthMilkTotalFlow(customerId: Long, startDate: String, endDate: String): Flow<BigDecimal?>
     
     // Aggregations
     @Query("SELECT SUM(transaction_quantity) FROM milk_transaction WHERE transaction_session NOT LIKE 'Payment%'")
