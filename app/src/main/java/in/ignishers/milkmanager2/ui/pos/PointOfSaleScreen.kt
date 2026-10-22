@@ -4,6 +4,7 @@ import android.app.DatePickerDialog
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,16 +14,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -32,6 +37,17 @@ import java.util.Calendar
 import java.util.Locale
 import `in`.ignishers.milkmanager2.models.DailyTransaction
 import `in`.ignishers.milkmanager2.models.Payment
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import `in`.ignishers.milkmanager2.models.Customer
+import java.math.RoundingMode
+import java.time.LocalDate
+import java.time.format.DateTimeFormatter
+import `in`.ignishers.milkmanager2.utils.PDFGenerator
+import kotlinx.coroutines.launch
 
 sealed class TodayHistoryItem {
     data class Milk(val transaction: DailyTransaction) : TodayHistoryItem()
@@ -65,16 +81,27 @@ fun PointOfSaleScreen(
     var showPaymentDialog by remember { mutableStateOf(false) }
     var itemToDelete by remember { mutableStateOf<TodayHistoryItem?>(null) }
 
+    var showOverflowMenu by remember { mutableStateOf(false) }
+    var showDefaultQtyDialog by remember { mutableStateOf(false) }
+    var showBillDialog by remember { mutableStateOf(false) }
+    var statementPreviewData by remember { mutableStateOf<BillReportData?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
     Scaffold(
         topBar = {
             TopAppBar(
+                modifier = Modifier.padding(vertical = 4.dp),
                 title = {
-                    Column {
-                        Text(customer?.name ?: "Loading...", fontWeight = FontWeight.Bold)
+                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                        Text(
+                            text = customer?.name ?: "Loading...",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
                         if (customer?.currentDue != null && customer?.currentDue!! > BigDecimal.ZERO) {
                             Text(
                                 text = "Due: ₹${customer?.currentDue}",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.errorContainer
                             )
                         }
@@ -88,7 +115,7 @@ fun PointOfSaleScreen(
                 actions = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 8.dp)
+                        modifier = Modifier.padding(end = 4.dp)
                     ) {
                         Text(
                             text = "Auto",
@@ -112,6 +139,36 @@ fun PointOfSaleScreen(
                             )
                         )
                     }
+
+                    // Three dots overflow menu
+                    Box {
+                        IconButton(onClick = { showOverflowMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = "Menu Options",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = showOverflowMenu,
+                            onDismissRequest = { showOverflowMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Default Quantity", fontWeight = FontWeight.Medium) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showDefaultQtyDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Bill", fontWeight = FontWeight.Medium) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    showBillDialog = true
+                                }
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -121,14 +178,55 @@ fun PointOfSaleScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        val density = LocalDensity.current
+        val swipeThreshold = remember(density) { with(density) { 60.dp.toPx() } }
+        var totalDragX by remember { mutableFloatStateOf(0f) }
+        val scrollState = rememberScrollState()
+
+        LaunchedEffect(customer?.id) {
+            scrollState.scrollTo(0)
+        }
+
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            totalDragX = 0f
+                        },
+                        onDragEnd = {
+                            if (totalDragX < -swipeThreshold) {
+                                val error = viewModel.navigateCustomer(isNext = true)
+                                if (error != null) {
+                                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                }
+                            } else if (totalDragX > swipeThreshold) {
+                                val error = viewModel.navigateCustomer(isNext = false)
+                                if (error != null) {
+                                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                            totalDragX = 0f
+                        },
+                        onDragCancel = {
+                            totalDragX = 0f
+                        },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            totalDragX += dragAmount
+                        }
+                    )
+                }
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
             // Customer Due & Balance Info Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -331,20 +429,21 @@ fun PointOfSaleScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    ){
                         Text(
-                            text = "Current Month Bill: ₹$currentMonthBill",
+                            text = "Current Month Bill:",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        if (todayTransactions.isNotEmpty() || todayPayments.isNotEmpty()) {
-                            Text(
-                                text = "Hold entry to delete",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Text(
+                            text = "₹$currentMonthBill",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
+
 
                     if (lastMonthDue < BigDecimal.ZERO) {
                         Spacer(modifier = Modifier.height(6.dp))
@@ -530,6 +629,7 @@ fun PointOfSaleScreen(
             }
         }
     }
+    }
 
     // Manual Entry Bottom Sheet (Slided-up Animated Dialog)
     if (showManualEntrySheet) {
@@ -601,6 +701,70 @@ fun PointOfSaleScreen(
                 TextButton(onClick = { itemToDelete = null }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    // Default Quantity Dialog
+    if (showDefaultQtyDialog && customer != null) {
+        DefaultQuantityDialog(
+            customer = customer!!,
+            milkRate = milkRate,
+            onDismiss = { showDefaultQtyDialog = false },
+            onUpdate = { morningQty, eveningQty ->
+                viewModel.updateDefaultQuantities(morningQty, eveningQty)
+                showDefaultQtyDialog = false
+                Toast.makeText(context, "Default quantities updated", Toast.LENGTH_SHORT).show()
+            }
+        )
+    }
+
+    // Bill Generation Dialog
+    if (showBillDialog && customer != null) {
+        BillDialog(
+            customer = customer!!,
+            onDismiss = { showBillDialog = false },
+            onGenerateReport = { startDate, endDate, reportTitle, isLastMonth, action ->
+                coroutineScope.launch {
+                    val reportData = viewModel.generateBillReport(startDate, endDate, reportTitle, isLastMonth)
+                    if (reportData != null) {
+                        when (action) {
+                            BillAction.VIEW -> {
+                                statementPreviewData = reportData
+                            }
+                            BillAction.SHARE -> {
+                                val file = PDFGenerator.generateCustomerMonthlyPDF(context, reportData)
+                                PDFGenerator.shareFile(context, file)
+                            }
+                            BillAction.SAVE -> {
+                                val file = PDFGenerator.generateCustomerMonthlyPDF(context, reportData)
+                                Toast.makeText(context, "Saved to ${file.name}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    } else {
+                        Toast.makeText(context, "No records found for this period", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        )
+    }
+
+    // Statement In-App Preview Dialog
+    if (statementPreviewData != null) {
+        StatementPreviewDialog(
+            reportData = statementPreviewData!!,
+            onDismiss = { statementPreviewData = null },
+            onShare = {
+                val file = PDFGenerator.generateCustomerMonthlyPDF(context, statementPreviewData!!)
+                PDFGenerator.shareFile(context, file)
+            },
+            onSave = {
+                val file = PDFGenerator.generateCustomerMonthlyPDF(context, statementPreviewData!!)
+                Toast.makeText(context, "Saved to ${file.name}", Toast.LENGTH_LONG).show()
+            },
+            onOpenPdf = {
+                val file = PDFGenerator.generateCustomerMonthlyPDF(context, statementPreviewData!!)
+                PDFGenerator.openFile(context, file)
             }
         )
     }
@@ -867,5 +1031,891 @@ fun SessionButton(text: String, isSelected: Boolean, onClick: () -> Unit, modifi
         shape = RoundedCornerShape(12.dp)
     ) {
         Text(text, fontWeight = FontWeight.Bold)
+    }
+}
+
+enum class BillAction {
+    VIEW, SHARE, SAVE
+}
+
+@Composable
+fun DefaultQuantityDialog(
+    customer: Customer,
+    milkRate: BigDecimal,
+    onDismiss: () -> Unit,
+    onUpdate: (morningQty: BigDecimal, eveningQty: BigDecimal) -> Unit
+) {
+    var selectedUnit by remember { mutableStateOf("Litres") } // "Litres" or "Rupees"
+    var morningText by remember {
+        mutableStateOf(
+            customer.defaultQtyMorning?.takeIf { it > BigDecimal.ZERO }?.stripTrailingZeros()?.toPlainString() ?: "0"
+        )
+    }
+    var eveningText by remember {
+        mutableStateOf(
+            customer.defaultQtyEvening?.takeIf { it > BigDecimal.ZERO }?.stripTrailingZeros()?.toPlainString() ?: "0"
+        )
+    }
+
+    fun switchUnit(newUnit: String) {
+        if (newUnit == selectedUnit) return
+        if (newUnit == "Rupees") {
+            val mQty = morningText.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            val eQty = eveningText.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            morningText = mQty.multiply(milkRate).stripTrailingZeros().toPlainString()
+            eveningText = eQty.multiply(milkRate).stripTrailingZeros().toPlainString()
+        } else {
+            val mAmt = morningText.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            val eAmt = eveningText.toBigDecimalOrNull() ?: BigDecimal.ZERO
+            val mQty = if (milkRate > BigDecimal.ZERO) mAmt.divide(milkRate, 2, RoundingMode.HALF_UP) else BigDecimal.ZERO
+            val eQty = if (milkRate > BigDecimal.ZERO) eAmt.divide(milkRate, 2, RoundingMode.HALF_UP) else BigDecimal.ZERO
+            morningText = mQty.stripTrailingZeros().toPlainString()
+            eveningText = eQty.stripTrailingZeros().toPlainString()
+        }
+        selectedUnit = newUnit
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Default Milk Quantity", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    text = "Customer: ${customer.name ?: "N/A"}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                // Radio buttons for Litres vs Rupees
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { switchUnit("Litres") }
+                    ) {
+                        RadioButton(
+                            selected = selectedUnit == "Litres",
+                            onClick = { switchUnit("Litres") }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Litres", style = MaterialTheme.typography.bodyMedium)
+                    }
+
+                    Spacer(modifier = Modifier.width(24.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { switchUnit("Rupees") }
+                    ) {
+                        RadioButton(
+                            selected = selectedUnit == "Rupees",
+                            onClick = { switchUnit("Rupees") }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Rupees", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+
+                Text(
+                    text = "Current Rate: ₹$milkRate / Litre",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium
+                )
+
+                // Morning Field
+                OutlinedTextField(
+                    value = morningText,
+                    onValueChange = { morningText = it },
+                    label = { Text(if (selectedUnit == "Litres") "Morning Milk (L)" else "Morning Amount (₹)") },
+                    prefix = { Text(if (selectedUnit == "Litres") "L " else "₹ ") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                // Evening Field
+                OutlinedTextField(
+                    value = eveningText,
+                    onValueChange = { eveningText = it },
+                    label = { Text(if (selectedUnit == "Litres") "Evening Milk (L)" else "Evening Amount (₹)") },
+                    prefix = { Text(if (selectedUnit == "Litres") "L " else "₹ ") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val mFinal = if (selectedUnit == "Litres") {
+                        morningText.toBigDecimalOrNull() ?: BigDecimal.ZERO
+                    } else {
+                        val amt = morningText.toBigDecimalOrNull() ?: BigDecimal.ZERO
+                        if (milkRate > BigDecimal.ZERO) amt.divide(milkRate, 2, RoundingMode.HALF_UP) else BigDecimal.ZERO
+                    }
+                    val eFinal = if (selectedUnit == "Litres") {
+                        eveningText.toBigDecimalOrNull() ?: BigDecimal.ZERO
+                    } else {
+                        val amt = eveningText.toBigDecimalOrNull() ?: BigDecimal.ZERO
+                        if (milkRate > BigDecimal.ZERO) amt.divide(milkRate, 2, RoundingMode.HALF_UP) else BigDecimal.ZERO
+                    }
+                    onUpdate(mFinal, eFinal)
+                }
+            ) {
+                Text("Update", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BillDialog(
+    customer: Customer,
+    onDismiss: () -> Unit,
+    onGenerateReport: (startDate: String, endDate: String, reportTitle: String, isLastMonth: Boolean, action: BillAction) -> Unit
+) {
+    val context = LocalContext.current
+    var isLastMonthSelected by remember { mutableStateOf(true) }
+
+    // Custom options state
+    var selectedReportType by remember { mutableStateOf("By Month") }
+    var reportTypeExpanded by remember { mutableStateOf(false) }
+
+    val currentYear = remember { LocalDate.now().year }
+    val years = remember { (currentYear - 4..currentYear + 1).toList().reversed() }
+    var selectedYear by remember { mutableIntStateOf(currentYear) }
+    var yearExpanded by remember { mutableStateOf(false) }
+
+    val months = listOf(
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+    )
+    val currentMonthIdx = remember { LocalDate.now().monthValue - 1 }
+    var selectedMonthIdx by remember { mutableIntStateOf(currentMonthIdx) }
+    var monthExpanded by remember { mutableStateOf(false) }
+
+    val quarters = listOf("Q1 (Jan - Mar)", "Q2 (Apr - Jun)", "Q3 (Jul - Sep)", "Q4 (Oct - Dec)")
+    var selectedQuarterIdx by remember { mutableIntStateOf(0) }
+    var quarterExpanded by remember { mutableStateOf(false) }
+
+    var customStartDate by remember {
+        mutableStateOf(LocalDate.now().withDayOfMonth(1).toString())
+    }
+    var customEndDate by remember {
+        mutableStateOf(LocalDate.now().toString())
+    }
+
+    val lastMonthDate = remember { LocalDate.now().minusMonths(1) }
+    val lastMonthTitle = remember { lastMonthDate.format(DateTimeFormatter.ofPattern("MMMM yyyy")) }
+
+    fun pickCustomDate(isStart: Boolean) {
+        val cal = Calendar.getInstance()
+        DatePickerDialog(
+            context,
+            { _, year, month, dayOfMonth ->
+                val dateStr = String.format(Locale.US, "%04d-%02d-%02d", year, month + 1, dayOfMonth)
+                if (isStart) customStartDate = dateStr else customEndDate = dateStr
+            },
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH),
+            cal.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    fun submitReport(action: BillAction) {
+        if (isLastMonthSelected) {
+            val start = lastMonthDate.withDayOfMonth(1).toString()
+            val end = lastMonthDate.withDayOfMonth(lastMonthDate.lengthOfMonth()).toString()
+            val title = "Last Month ($lastMonthTitle)"
+            onGenerateReport(start, end, title, true, action)
+        } else {
+            when (selectedReportType) {
+                "By Month" -> {
+                    val mNum = selectedMonthIdx + 1
+                    val targetMonth = LocalDate.of(selectedYear, mNum, 1)
+                    val start = targetMonth.withDayOfMonth(1).toString()
+                    val end = targetMonth.withDayOfMonth(targetMonth.lengthOfMonth()).toString()
+                    val title = "${months[selectedMonthIdx]} $selectedYear"
+                    onGenerateReport(start, end, title, false, action)
+                }
+                "By Quarter" -> {
+                    val (startMonth, endMonth, endDay) = when (selectedQuarterIdx) {
+                        0 -> Triple(1, 3, 31)
+                        1 -> Triple(4, 6, 30)
+                        2 -> Triple(7, 9, 30)
+                        else -> Triple(10, 12, 31)
+                    }
+                    val start = String.format(Locale.US, "%04d-%02d-01", selectedYear, startMonth)
+                    val end = String.format(Locale.US, "%04d-%02d-%02d", selectedYear, endMonth, endDay)
+                    val title = "${quarters[selectedQuarterIdx].split(" ").first()} $selectedYear"
+                    onGenerateReport(start, end, title, false, action)
+                }
+                "By Year" -> {
+                    val start = "$selectedYear-01-01"
+                    val end = "$selectedYear-12-31"
+                    val title = "Year $selectedYear"
+                    onGenerateReport(start, end, title, false, action)
+                }
+                "Lifetime" -> {
+                    onGenerateReport("", "", "Lifetime Statement", false, action)
+                }
+                "Custom Date Range" -> {
+                    val title = "$customStartDate to $customEndDate"
+                    onGenerateReport(customStartDate, customEndDate, title, false, action)
+                }
+            }
+        }
+        onDismiss()
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("Generate Bill & Statement", fontWeight = FontWeight.Bold)
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Customer Info Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = customer.name ?: "Customer",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Due: ₹${customer.currentDue ?: BigDecimal.ZERO}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = if ((customer.currentDue ?: BigDecimal.ZERO) > BigDecimal.ZERO) MaterialTheme.colorScheme.error else Color(0xFF10B981)
+                            )
+                        }
+                        if (!customer.mobile.isNullOrBlank()) {
+                            Text(
+                                text = "Mobile: ${customer.mobile}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Radio buttons: Last Month vs Custom
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { isLastMonthSelected = true }
+                    ) {
+                        RadioButton(
+                            selected = isLastMonthSelected,
+                            onClick = { isLastMonthSelected = true }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Last Month", fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Spacer(modifier = Modifier.width(20.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { isLastMonthSelected = false }
+                    ) {
+                        RadioButton(
+                            selected = !isLastMonthSelected,
+                            onClick = { isLastMonthSelected = false }
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Custom", fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                if (isLastMonthSelected) {
+                    // Last Month Info Box
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "Month: $lastMonthTitle",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Includes all milk deliveries in $lastMonthTitle and accounts for settlements paid in the following month.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    // Custom Configuration Box
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        // Report Type Dropdown
+                        Text("Report Type", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { reportTypeExpanded = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(selectedReportType)
+                                    Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null)
+                                }
+                            }
+                            DropdownMenu(
+                                expanded = reportTypeExpanded,
+                                onDismissRequest = { reportTypeExpanded = false }
+                            ) {
+                                val reportTypes = listOf("By Month", "By Quarter", "By Year", "Lifetime", "Custom Date Range")
+                                reportTypes.forEach { type ->
+                                    DropdownMenuItem(
+                                        text = { Text(type) },
+                                        onClick = {
+                                            selectedReportType = type
+                                            reportTypeExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        when (selectedReportType) {
+                            "By Month" -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Year Selector
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        OutlinedButton(
+                                            onClick = { yearExpanded = true },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("$selectedYear")
+                                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null)
+                                        }
+                                        DropdownMenu(
+                                            expanded = yearExpanded,
+                                            onDismissRequest = { yearExpanded = false }
+                                        ) {
+                                            years.forEach { y ->
+                                                DropdownMenuItem(
+                                                    text = { Text("$y") },
+                                                    onClick = {
+                                                        selectedYear = y
+                                                        yearExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Month Selector
+                                    Box(modifier = Modifier.weight(1.4f)) {
+                                        OutlinedButton(
+                                            onClick = { monthExpanded = true },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(months[selectedMonthIdx])
+                                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null)
+                                        }
+                                        DropdownMenu(
+                                            expanded = monthExpanded,
+                                            onDismissRequest = { monthExpanded = false }
+                                        ) {
+                                            months.forEachIndexed { index, mName ->
+                                                DropdownMenuItem(
+                                                    text = { Text(mName) },
+                                                    onClick = {
+                                                        selectedMonthIdx = index
+                                                        monthExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            "By Quarter" -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Year Selector
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        OutlinedButton(
+                                            onClick = { yearExpanded = true },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text("$selectedYear")
+                                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null)
+                                        }
+                                        DropdownMenu(
+                                            expanded = yearExpanded,
+                                            onDismissRequest = { yearExpanded = false }
+                                        ) {
+                                            years.forEach { y ->
+                                                DropdownMenuItem(
+                                                    text = { Text("$y") },
+                                                    onClick = {
+                                                        selectedYear = y
+                                                        yearExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Quarter Selector
+                                    Box(modifier = Modifier.weight(1.5f)) {
+                                        OutlinedButton(
+                                            onClick = { quarterExpanded = true },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(quarters[selectedQuarterIdx])
+                                            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null)
+                                        }
+                                        DropdownMenu(
+                                            expanded = quarterExpanded,
+                                            onDismissRequest = { quarterExpanded = false }
+                                        ) {
+                                            quarters.forEachIndexed { index, qName ->
+                                                DropdownMenuItem(
+                                                    text = { Text(qName) },
+                                                    onClick = {
+                                                        selectedQuarterIdx = index
+                                                        quarterExpanded = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            "By Year" -> {
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    OutlinedButton(
+                                        onClick = { yearExpanded = true },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Year: $selectedYear")
+                                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null)
+                                    }
+                                    DropdownMenu(
+                                        expanded = yearExpanded,
+                                        onDismissRequest = { yearExpanded = false }
+                                    ) {
+                                        years.forEach { y ->
+                                            DropdownMenuItem(
+                                                text = { Text("$y") },
+                                                onClick = {
+                                                    selectedYear = y
+                                                    yearExpanded = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            "Lifetime" -> {
+                                Text(
+                                    text = "Generates complete statement of all records since customer registration.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            "Custom Date Range" -> {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { pickCustomDate(true) },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("From", style = MaterialTheme.typography.labelSmall)
+                                            Text(customStartDate, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                    OutlinedButton(
+                                        onClick = { pickCustomDate(false) },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text("To", style = MaterialTheme.typography.labelSmall)
+                                            Text(customEndDate, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Three Action Buttons (View, Share, Save)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { submitReport(BillAction.VIEW) },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Text("View", fontWeight = FontWeight.Bold)
+                    }
+
+                    FilledTonalButton(
+                        onClick = { submitReport(BillAction.SHARE) },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Text("Share", fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = { submitReport(BillAction.SAVE) },
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Text("Save", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun StatementPreviewDialog(
+    reportData: BillReportData,
+    onDismiss: () -> Unit,
+    onShare: () -> Unit,
+    onSave: () -> Unit,
+    onOpenPdf: () -> Unit
+) {
+    var selectedMonthIndex by remember { mutableIntStateOf(0) }
+    val currentMonthData = reportData.months.getOrNull(selectedMonthIndex) ?: reportData.months.firstOrNull()
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.96f)
+                .fillMaxHeight(0.92f),
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(14.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = reportData.customer.name ?: "Customer",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = reportData.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Filled.Close, contentDescription = "Close")
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // Month Switcher (if more than 1 month)
+                if (reportData.months.size > 1) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = { if (selectedMonthIndex > 0) selectedMonthIndex-- },
+                            enabled = selectedMonthIndex > 0
+                        ) {
+                            Text("◀", fontWeight = FontWeight.Bold)
+                        }
+
+                        Text(
+                            text = currentMonthData?.monthTitle ?: "",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        IconButton(
+                            onClick = { if (selectedMonthIndex < reportData.months.size - 1) selectedMonthIndex++ },
+                            enabled = selectedMonthIndex < reportData.months.size - 1
+                        ) {
+                            Text("▶", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Month Summary Box
+                if (currentMonthData != null) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Opening Due: ₹${currentMonthData.openingBalance}", style = MaterialTheme.typography.bodySmall)
+                                Text("Milk: ${currentMonthData.totalMilk} L (₹${currentMonthData.totalBill})", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Month Paid: ₹${currentMonthData.paidInMonth}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF10B981))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Final Due: ", style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        text = "₹${currentMonthData.finalDue}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (currentMonthData.finalDue > BigDecimal.ZERO) MaterialTheme.colorScheme.error else Color(0xFF10B981)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = if (currentMonthData.isPaid) Color(0xFF10B981).copy(alpha = 0.2f) else MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+                                    ) {
+                                        Text(
+                                            text = if (currentMonthData.isPaid) "PAID" else "PENDING",
+                                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (currentMonthData.isPaid) Color(0xFF10B981) else MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            }
+                            if (currentMonthData.postMonthPayments.isNotEmpty()) {
+                                val postPaidTotal = currentMonthData.postMonthPayments.sumOf { it.amount }
+                                Text(
+                                    text = "Settlement: - ₹$postPaidTotal paid in subsequent month",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color(0xFF10B981),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Table Header
+                Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Date",
+                            modifier = Modifier.weight(0.9f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Text(
+                            text = "Morning",
+                            modifier = Modifier.weight(1.3f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Text(
+                            text = "Evening",
+                            modifier = Modifier.weight(1.3f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Text(
+                            text = "Payment",
+                            modifier = Modifier.weight(1.1f),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                }
+
+                // Table Rows
+                val scrollState = rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                ) {
+                    val daysList = currentMonthData?.days ?: emptyList()
+                    daysList.forEachIndexed { index, day ->
+                        val rowBg = if (index % 2 == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                        Surface(
+                            color = rowBg,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = String.format(Locale.US, "%02d", day.day),
+                                    modifier = Modifier.weight(0.9f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                Text(
+                                    text = if (day.mornQty > BigDecimal.ZERO || day.mornAmt > BigDecimal.ZERO) {
+                                        "${day.mornQty}L\n₹${day.mornAmt}"
+                                    } else {
+                                        "-"
+                                    },
+                                    modifier = Modifier.weight(1.3f),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+
+                                Text(
+                                    text = if (day.eveQty > BigDecimal.ZERO || day.eveAmt > BigDecimal.ZERO) {
+                                        "${day.eveQty}L\n₹${day.eveAmt}"
+                                    } else {
+                                        "-"
+                                    },
+                                    modifier = Modifier.weight(1.3f),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+
+                                Text(
+                                    text = if (day.paymentAmt > BigDecimal.ZERO) {
+                                        "₹${day.paymentAmt}"
+                                    } else {
+                                        "-"
+                                    },
+                                    modifier = Modifier.weight(1.1f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = if (day.paymentAmt > BigDecimal.ZERO) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (day.paymentAmt > BigDecimal.ZERO) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+                // Bottom Action Buttons: PDF View, Share, Save, Close
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = onOpenPdf,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Text("PDF View", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+
+                    FilledTonalButton(
+                        onClick = onShare,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Text("Share", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = onSave,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Text("Save", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
     }
 }
