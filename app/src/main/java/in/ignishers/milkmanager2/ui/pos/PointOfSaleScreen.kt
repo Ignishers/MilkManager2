@@ -334,7 +334,20 @@ fun PointOfSaleScreen(
                                                         color = if (trans.session == "Morning") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
                                                     )
                                                 }
-
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                val milkTypeTag = trans.milkType?.take(1)?.uppercase() ?: "R"
+                                                Surface(
+                                                    shape = RoundedCornerShape(4.dp),
+                                                    color = if (milkTypeTag == "R") MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.tertiaryContainer
+                                                ) {
+                                                    Text(
+                                                        text = milkTypeTag,
+                                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (milkTypeTag == "R") MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onTertiaryContainer
+                                                    )
+                                                }
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text(
                                                     text = "${trans.quantity ?: 0} Litres",
