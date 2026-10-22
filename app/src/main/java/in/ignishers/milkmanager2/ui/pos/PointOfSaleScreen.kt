@@ -102,49 +102,6 @@ fun PointOfSaleScreen(
                 }
             }
 
-            // Customer Auto Entry Status Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (customer?.autoEntryEnabled == true)
-                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                    else
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Daily Auto Entry",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = if (customer?.autoEntryEnabled == true) {
-                                "Active • Morning: ${customer?.defaultQtyMorning ?: BigDecimal.ZERO}L (5 AM) • Evening: ${customer?.defaultQtyEvening ?: BigDecimal.ZERO}L (4 PM)"
-                            } else {
-                                "Disabled for this customer"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = customer?.autoEntryEnabled == true,
-                        onCheckedChange = { enabled ->
-                            viewModel.toggleCustomerAutoEntry(enabled)
-                        }
-                    )
-                }
-            }
-
             // Session Segmented Buttons
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SessionButton(
