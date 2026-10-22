@@ -22,6 +22,12 @@ interface PaymentRoomDao {
     @Query("SELECT * FROM payment WHERE customer_id_fk = :customerId AND payment_date = :date ORDER BY payment_id DESC")
     fun getPaymentsByDate(customerId: Long, date: String): Flow<List<Payment>>
 
+    @Query("SELECT * FROM payment WHERE customer_id_fk = :customerId AND payment_date BETWEEN :startDate AND :endDate ORDER BY payment_date ASC, payment_id ASC")
+    suspend fun getPaymentsByDateRange(customerId: Long, startDate: String, endDate: String): List<Payment>
+
+    @Query("SELECT * FROM payment WHERE customer_id_fk = :customerId ORDER BY payment_date ASC, payment_id ASC")
+    suspend fun getAllPaymentsForCustomer(customerId: Long): List<Payment>
+
     @Query("SELECT SUM(payment_amount) FROM payment")
     suspend fun getTotalCollectedLifetime(): BigDecimal?
 }
