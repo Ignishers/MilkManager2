@@ -57,6 +57,8 @@ fun PointOfSaleScreen(
     val milkRate by viewModel.milkRate.collectAsState()
     val todayTransactions by viewModel.todayTransactions.collectAsState()
     val todayPayments by viewModel.todayPayments.collectAsState()
+    val currentMonthBill by viewModel.currentMonthBill.collectAsState()
+    val lastMonthDue by viewModel.lastMonthDue.collectAsState()
 
     var showQuickMenu by remember { mutableStateOf(false) }
     var showManualEntrySheet by remember { mutableStateOf(false) }
@@ -84,13 +86,6 @@ fun PointOfSaleScreen(
                     }
                 },
                 actions = {
-                    TextButton(
-                        onClick = { showPaymentDialog = true },
-                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.onPrimary)
-                    ) {
-                        Text("+ Pay", fontWeight = FontWeight.Bold)
-                    }
-
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(end = 8.dp)
@@ -134,33 +129,65 @@ fun PointOfSaleScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Date & Due Info Card
+            // Customer Due & Balance Info Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text("Date", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(currentDate, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Mobile No & Total Due Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Mobile No", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = customer?.mobile?.takeIf { it.isNotBlank() } ?: "-",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Total Due", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = "₹${customer?.currentDue ?: BigDecimal.ZERO}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if ((customer?.currentDue ?: BigDecimal.ZERO) > BigDecimal.ZERO) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Rate", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("₹${milkRate}/L", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("Total Due", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                            text = "₹${customer?.currentDue ?: BigDecimal.ZERO}",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if ((customer?.currentDue ?: BigDecimal.ZERO) > BigDecimal.ZERO) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                        )
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 12.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    // Last Month Due & Pay Button Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column {
+                            Text("Last Month Due", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = if (lastMonthDue > BigDecimal.ZERO) "₹$lastMonthDue" else "₹0",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (lastMonthDue > BigDecimal.ZERO) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Button(
+                            onClick = { showPaymentDialog = true },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                        ) {
+                            Text("Pay", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -193,7 +220,42 @@ fun PointOfSaleScreen(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Date & Rate Info Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Date: ",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = currentDate,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Rate: ",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "₹${milkRate}/L",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // Row with Quick Extras Dropdown and Manual Entry Button
                     Row(
@@ -271,7 +333,7 @@ fun PointOfSaleScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Today's History",
+                            text = "Current Month Bill: ₹$currentMonthBill",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -280,6 +342,54 @@ fun PointOfSaleScreen(
                                 text = "Hold entry to delete",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    if (lastMonthDue < BigDecimal.ZERO) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Extra Paid / Advance:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFF10B981)
+                            )
+                            Text(
+                                text = "- ₹${lastMonthDue.abs()}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF10B981)
+                            )
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                        )
+
+                        val remainingDue = customer?.currentDue ?: BigDecimal.ZERO
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Remaining Due:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (remainingDue < BigDecimal.ZERO) "- ₹${remainingDue.abs()}" else "₹$remainingDue",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (remainingDue > BigDecimal.ZERO) MaterialTheme.colorScheme.error
+                                        else if (remainingDue < BigDecimal.ZERO) Color(0xFF10B981)
+                                        else MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -437,8 +547,14 @@ fun PointOfSaleScreen(
 
     // Record Payment Dialog
     if (showPaymentDialog) {
+        val paymentPrefill = if (lastMonthDue > BigDecimal.ZERO) {
+            lastMonthDue
+        } else {
+            customer?.currentDue?.takeIf { it > BigDecimal.ZERO }
+        }
         RecordPaymentDialog(
             initialDate = currentDate,
+            initialAmount = paymentPrefill,
             onDismiss = { showPaymentDialog = false },
             onSave = { amount, mode, date ->
                 viewModel.addPayment(amount, mode, date)
@@ -676,10 +792,13 @@ fun ManualEntryBottomSheet(
 @Composable
 fun RecordPaymentDialog(
     initialDate: String,
+    initialAmount: BigDecimal? = null,
     onDismiss: () -> Unit,
     onSave: (amount: BigDecimal, mode: String, date: String) -> Unit
 ) {
-    var amountText by remember { mutableStateOf("") }
+    var amountText by remember {
+        mutableStateOf(initialAmount?.takeIf { it > BigDecimal.ZERO }?.stripTrailingZeros()?.toPlainString() ?: "")
+    }
     var paymentMode by remember { mutableStateOf("Cash") }
 
     AlertDialog(
