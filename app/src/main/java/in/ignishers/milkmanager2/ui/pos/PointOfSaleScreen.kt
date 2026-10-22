@@ -56,7 +56,15 @@ fun PointOfSaleScreen(
                             checked = customer?.autoEntryEnabled == true,
                             onCheckedChange = { enabled ->
                                 viewModel.toggleCustomerAutoEntry(enabled)
-                            }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedBorderColor = MaterialTheme.colorScheme.onPrimary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                                uncheckedTrackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
+                                uncheckedBorderColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
+                            )
                         )
                     }
                 },

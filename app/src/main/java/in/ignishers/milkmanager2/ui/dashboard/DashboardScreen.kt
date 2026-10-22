@@ -296,7 +296,15 @@ fun DashboardScreen(
                                     if (enabled) "Master Auto Entry ON (5:00 AM & 4:00 PM)" else "Master Auto Entry OFF",
                                     Toast.LENGTH_SHORT
                                 ).show()
-                            }
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedBorderColor = MaterialTheme.colorScheme.onPrimary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                                uncheckedTrackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
+                                uncheckedBorderColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
+                            )
                         )
                     }
                     Box {
