@@ -131,6 +131,11 @@ class PointOfSaleViewModel(
                     val a = q.multiply(rate).setScale(2, RoundingMode.HALF_UP)
                     q to a
                 }
+                "750ml" -> {
+                    val q = BigDecimal("0.75")
+                    val a = q.multiply(rate).setScale(2, RoundingMode.HALF_UP)
+                    q to a
+                }
                 "1l" -> {
                     val q = BigDecimal("1.00")
                     val a = q.multiply(rate).setScale(2, RoundingMode.HALF_UP)

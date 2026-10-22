@@ -195,22 +195,6 @@ fun PointOfSaleScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Default Entry Button
-                    val defaultQty = if (session == "Morning") customer?.defaultQtyMorning else customer?.defaultQtyEvening
-                    if (defaultQty != null && defaultQty > BigDecimal.ZERO) {
-                        FilledTonalButton(
-                            onClick = {
-                                viewModel.addDefaultEntry()
-                                Toast.makeText(context, "Added $session default ($defaultQty L)", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Add $session Default ($defaultQty L)", fontWeight = FontWeight.Bold)
-                        }
-                        Spacer(modifier = Modifier.height(10.dp))
-                    }
-
                     // Row with Quick Extras Dropdown and Manual Entry Button
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -244,6 +228,7 @@ fun PointOfSaleScreen(
                                     "50rs" to "₹50",
                                     "250ml" to "250 ml",
                                     "500ml" to "500 ml",
+                                    "750ml" to "750 ml",
                                     "1l" to "1 Litre"
                                 )
                                 quickOptions.forEach { (key, label) ->
@@ -349,6 +334,7 @@ fun PointOfSaleScreen(
                                                         color = if (trans.session == "Morning") MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
                                                     )
                                                 }
+
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 Text(
                                                     text = "${trans.quantity ?: 0} Litres",
