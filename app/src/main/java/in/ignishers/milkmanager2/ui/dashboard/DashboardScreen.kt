@@ -55,6 +55,11 @@ fun DashboardScreen(
     val allRouteGroups by viewModel.routeGroups.collectAsState()
     val totalRevenue by viewModel.totalRevenue.collectAsState()
     val totalMilk by viewModel.totalMilk.collectAsState()
+    val isAutoEntryMasterEnabled by viewModel.isAutoEntryMasterEnabled.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.checkPendingAutoEntries(context)
+    }
     
     var showAddCustomerDialog by remember { mutableStateOf(false) }
     var customerToEdit by remember { mutableStateOf<Customer?>(null) }
@@ -271,6 +276,29 @@ fun DashboardScreen(
                     }
                 },
                 actions = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text(
+                            text = "Auto",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Switch(
+                            checked = isAutoEntryMasterEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.setAutoEntryMasterEnabled(context, enabled)
+                                Toast.makeText(
+                                    context,
+                                    if (enabled) "Master Auto Entry ON (5:00 AM & 4:00 PM)" else "Master Auto Entry OFF",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        )
+                    }
                     Box {
                         IconButton(onClick = { showMenu = true }) {
                             Icon(Icons.Filled.MoreVert, contentDescription = "Menu")
@@ -417,17 +445,46 @@ fun DashboardScreen(
                         .padding(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Total Milk", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
-                            Text("${totalMilk.toPlainString()} L", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Total Milk", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                                Text("${totalMilk.toPlainString()} L", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Revenue", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                                Text("₹${totalRevenue.toPlainString()}", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Revenue", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
-                            Text("₹${totalRevenue.toPlainString()}", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isAutoEntryMasterEnabled) "Auto Daily Entry (5 AM & 4 PM)" else "Auto Daily Entry: Inactive",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = if (isAutoEntryMasterEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = if (isAutoEntryMasterEnabled) "ACTIVE" else "DISABLED",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isAutoEntryMasterEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }

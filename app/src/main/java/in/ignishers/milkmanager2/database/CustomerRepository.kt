@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.Flow
 class CustomerRepository(private val customerDao: CustomerRoomDao) {
     fun getAllCustomers(): Flow<List<Customer>> = customerDao.getAllCustomers()
 
+    suspend fun getAllCustomersList(): List<Customer> = customerDao.getAllCustomersList()
+
     fun getCustomersByRoute(routeId: Long): Flow<List<Customer>> = customerDao.getCustomersByRoute(routeId)
     
     fun getRootCustomers(): Flow<List<Customer>> = customerDao.getRootCustomers()
@@ -26,6 +28,10 @@ class CustomerRepository(private val customerDao: CustomerRoomDao) {
         customer.syncIsSynced = 0
         customer.syncUpdatedAt = System.currentTimeMillis()
         customerDao.update(customer)
+    }
+
+    suspend fun updateAutoEntry(id: Long, enabled: Boolean) {
+        customerDao.updateAutoEntry(id, enabled)
     }
 
     suspend fun delete(id: Long) {

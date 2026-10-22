@@ -73,6 +73,16 @@ class PointOfSaleViewModel(
         _amount.value = _quantity.value.multiply(_milkRate.value)
     }
     
+    fun toggleCustomerAutoEntry(enabled: Boolean) {
+        launchSafe {
+            val cust = _customer.value ?: return@launchSafe
+            val custId = cust.id ?: return@launchSafe
+            cust.autoEntryEnabled = enabled
+            customerRepository.updateAutoEntry(custId, enabled)
+            _customer.value = customerRepository.getCustomerById(custId)
+        }
+    }
+
     fun saveEntry(onSuccess: () -> Unit) {
         launchSafe {
             val cust = _customer.value ?: return@launchSafe
@@ -81,9 +91,12 @@ class PointOfSaleViewModel(
                 date = _currentDate.value,
                 session = _session.value,
                 quantity = _quantity.value,
-                amount = _amount.value
+                amount = _amount.value,
+                timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
             )
             transactionDao.insert(transaction)
+            cust.currentDue = (cust.currentDue ?: BigDecimal.ZERO).add(_amount.value)
+            customerRepository.update(cust)
             onSuccess()
         }
     }

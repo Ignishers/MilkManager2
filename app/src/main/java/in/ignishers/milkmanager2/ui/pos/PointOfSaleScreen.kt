@@ -40,6 +40,26 @@ fun PointOfSaleScreen(
                         Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
+                actions = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Text(
+                            text = "Auto",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Switch(
+                            checked = customer?.autoEntryEnabled == true,
+                            onCheckedChange = { enabled ->
+                                viewModel.toggleCustomerAutoEntry(enabled)
+                            }
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     titleContentColor = MaterialTheme.colorScheme.onPrimary,
@@ -79,6 +99,49 @@ fun PointOfSaleScreen(
                 ) {
                     Text("Date:", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                     Text(currentDate, style = MaterialTheme.typography.titleMedium)
+                }
+            }
+
+            // Customer Auto Entry Status Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (customer?.autoEntryEnabled == true)
+                        MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Daily Auto Entry",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = if (customer?.autoEntryEnabled == true) {
+                                "Active • Morning: ${customer?.defaultQtyMorning ?: BigDecimal.ZERO}L (5 AM) • Evening: ${customer?.defaultQtyEvening ?: BigDecimal.ZERO}L (4 PM)"
+                            } else {
+                                "Disabled for this customer"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = customer?.autoEntryEnabled == true,
+                        onCheckedChange = { enabled ->
+                            viewModel.toggleCustomerAutoEntry(enabled)
+                        }
+                    )
                 }
             }
 
