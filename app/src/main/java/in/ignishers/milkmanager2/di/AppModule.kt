@@ -32,5 +32,5 @@ val appModule = module {
     
     // ViewModels
     viewModel { DashboardViewModel(get(), get(), get(), get(), get()) }
-    viewModel { PointOfSaleViewModel(get(), get()) }
+    viewModel { PointOfSaleViewModel(get(), get(), get(), get()) }
 }
