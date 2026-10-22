@@ -10,10 +10,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import `in`.ignishers.milkmanager2.utils.dragAndDrop
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
@@ -61,13 +60,14 @@ fun DashboardScreen(
     var customerToEdit by remember { mutableStateOf<Customer?>(null) }
     
     var showAddRouteDialog by remember { mutableStateOf(false) }
-    var isReorderMode by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showMilkPriceDialog by remember { mutableStateOf(false) }
     
     // Action Menu States
     var selectedCustomerForAction by remember { mutableStateOf<Customer?>(null) }
     var selectedRouteForAction by remember { mutableStateOf<RouteGroup?>(null) }
+    var customerToMove by remember { mutableStateOf<Customer?>(null) }
+    var routeToMove by remember { mutableStateOf<RouteGroup?>(null) }
     
     var isFabExpanded by remember { mutableStateOf(false) }
     val fabRotation by animateFloatAsState(targetValue = if (isFabExpanded) 45f else 0f)
@@ -148,7 +148,7 @@ fun DashboardScreen(
                     headlineContent = { Text("Move to Route") },
                     leadingContent = { Icon(Icons.Filled.ArrowForward, contentDescription = null) },
                     modifier = Modifier.clickable {
-                        Toast.makeText(context, "Move feature coming soon", Toast.LENGTH_SHORT).show()
+                        customerToMove = selectedCustomerForAction
                         selectedCustomerForAction = null
                     }
                 )
@@ -180,6 +180,14 @@ fun DashboardScreen(
                 )
                 HorizontalDivider()
                 ListItem(
+                    headlineContent = { Text("Move Route") },
+                    leadingContent = { Icon(Icons.Filled.ArrowForward, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        routeToMove = selectedRouteForAction
+                        selectedRouteForAction = null
+                    }
+                )
+                ListItem(
                     headlineContent = { Text("Delete Route", color = MaterialTheme.colorScheme.error) },
                     leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                     modifier = Modifier.clickable {
@@ -198,6 +206,59 @@ fun DashboardScreen(
         }
     }
 
+    if (customerToMove != null) {
+        val customer = customerToMove!!
+        MoveItemDialog(
+            title = "Move \"${customer.name ?: "Customer"}\"",
+            currentParentId = customer.routeGroupId,
+            availableRoutes = allRouteGroups,
+            onDismiss = { customerToMove = null },
+            onSelectDestination = { targetRouteId ->
+                val maxSort = customers.filter { it.routeGroupId == targetRouteId }.maxOfOrNull { it.sortOrder ?: 0 } ?: -1
+                customer.sortOrder = maxSort + 1
+                customer.routeGroupId = targetRouteId
+                viewModel.updateCustomer(customer)
+                val targetName = allRouteGroups.find { it.id == targetRouteId }?.name ?: "Main Dashboard"
+                Toast.makeText(context, "Moved ${customer.name} to $targetName", Toast.LENGTH_SHORT).show()
+                customerToMove = null
+            }
+        )
+    }
+
+    if (routeToMove != null) {
+        val route = routeToMove!!
+        val descendantIds = remember(route.id, allRouteGroups) {
+            val descendants = mutableSetOf<Long>()
+            fun findChildren(parentId: Long) {
+                allRouteGroups.filter { it.parentId == parentId }.forEach { child ->
+                    child.id?.let { cid ->
+                        if (descendants.add(cid)) {
+                            findChildren(cid)
+                        }
+                    }
+                }
+            }
+            route.id?.let { findChildren(it) }
+            descendants
+        }
+        val availableRoutes = allRouteGroups.filter { it.id != route.id && it.id !in descendantIds }
+        MoveItemDialog(
+            title = "Move \"${route.name ?: "Route"}\"",
+            currentParentId = route.parentId,
+            availableRoutes = availableRoutes,
+            onDismiss = { routeToMove = null },
+            onSelectDestination = { targetParentId ->
+                val maxSort = allRouteGroups.filter { it.parentId == targetParentId }.maxOfOrNull { it.sortOrder ?: 0 } ?: -1
+                route.sortOrder = maxSort + 1
+                route.parentId = targetParentId
+                viewModel.updateRouteGroup(route)
+                val targetName = allRouteGroups.find { it.id == targetParentId }?.name ?: "Main Dashboard"
+                Toast.makeText(context, "Moved ${route.name} to $targetName", Toast.LENGTH_SHORT).show()
+                routeToMove = null
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -211,28 +272,14 @@ fun DashboardScreen(
                 },
                 actions = {
                     Box {
-                        IconButton(onClick = { 
-                            if (isReorderMode) {
-                                isReorderMode = false 
-                            } else {
-                                showMenu = true
-                            }
-                        }) {
-                            Icon(if (isReorderMode) Icons.Filled.Check else Icons.Filled.MoreVert, contentDescription = "Menu")
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "Menu")
                         }
                         
                         DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Reorder List") },
-                                onClick = { 
-                                    isReorderMode = true
-                                    showMenu = false 
-                                },
-                                leadingIcon = { Icon(Icons.Filled.List, contentDescription = null) }
-                            )
                             DropdownMenuItem(
                                 text = { Text("Update Milk Price") },
                                 onClick = { 
@@ -422,7 +469,6 @@ fun DashboardScreen(
                         if (item is RouteGroup) {
                             RouteCard(
                                 routeGroup = item,
-                                isReorderMode = isReorderMode,
                                 canMoveUp = !isFirstOfType,
                                 canMoveDown = !isLastOfType,
                                 onMoveUp = {
@@ -437,13 +483,12 @@ fun DashboardScreen(
                                     uiItems = mutableItems
                                     saveSortOrder()
                                 },
-                                onClick = { if (!isReorderMode) onNavigateToRoute(item.id!!) },
-                                onLongClick = { if (!isReorderMode) selectedRouteForAction = item }
+                                onClick = { onNavigateToRoute(item.id!!) },
+                                onLongClick = { selectedRouteForAction = item }
                             )
                         } else if (item is Customer) {
                             CustomerCard(
                                 customer = item,
-                                isReorderMode = isReorderMode,
                                 canMoveUp = !isFirstOfType,
                                 canMoveDown = !isLastOfType,
                                 onMoveUp = {
@@ -458,8 +503,8 @@ fun DashboardScreen(
                                     uiItems = mutableItems
                                     saveSortOrder()
                                 },
-                                onClick = { if (!isReorderMode) onNavigateToPos(item.id!!) },
-                                onLongClick = { if (!isReorderMode) selectedCustomerForAction = item }
+                                onClick = { onNavigateToPos(item.id!!) },
+                                onLongClick = { selectedCustomerForAction = item }
                             )
                         }
                     }
@@ -473,7 +518,6 @@ fun DashboardScreen(
 @Composable
 fun RouteCard(
     routeGroup: RouteGroup, 
-    isReorderMode: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onMoveUp: () -> Unit,
@@ -492,7 +536,7 @@ fun RouteCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(Icons.Filled.LocationOn, contentDescription = "Route", tint = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -501,21 +545,25 @@ fun RouteCard(
                 text = routeGroup.name ?: "Unnamed Route",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f)
             )
-            Spacer(modifier = Modifier.weight(1f))
             
-            if (isReorderMode) {
-                Row {
-                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move Up")
-                    }
-                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move Down")
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp, 
+                        contentDescription = "Move Up",
+                        tint = if (canMoveUp) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
+                    )
                 }
-            } else {
-                Icon(Icons.Filled.Menu, contentDescription = "Drag Handle", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown, 
+                        contentDescription = "Move Down",
+                        tint = if (canMoveDown) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
+                    )
+                }
             }
         }
     }
@@ -525,7 +573,6 @@ fun RouteCard(
 @Composable
 fun CustomerCard(
     customer: Customer,
-    isReorderMode: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onMoveUp: () -> Unit,
@@ -543,7 +590,10 @@ fun CustomerCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), 
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = customer.name ?: "Unknown",
@@ -570,18 +620,92 @@ fun CustomerCard(
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
-            if (isReorderMode) {
-                Row {
-                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move Up")
-                    }
-                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move Down")
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp, 
+                        contentDescription = "Move Up",
+                        tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
                 }
-            } else {
-                Icon(Icons.Filled.Menu, contentDescription = "Drag Handle", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown, 
+                        contentDescription = "Move Down",
+                        tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+fun MoveItemDialog(
+    title: String,
+    currentParentId: Long?,
+    availableRoutes: List<RouteGroup>,
+    onDismiss: () -> Unit,
+    onSelectDestination: (Long?) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 350.dp)
+            ) {
+                item {
+                    val isCurrent = currentParentId == null
+                    ListItem(
+                        headlineContent = { 
+                            Text(
+                                "Main Dashboard (Root)", 
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                            ) 
+                        },
+                        leadingContent = { 
+                            Icon(Icons.Filled.Home, contentDescription = null, tint = MaterialTheme.colorScheme.primary) 
+                        },
+                        supportingContent = if (isCurrent) { { Text("Current location") } } else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isCurrent) {
+                                onSelectDestination(null)
+                            }
+                    )
+                    HorizontalDivider()
+                }
+
+                items(availableRoutes) { route ->
+                    val isCurrent = currentParentId == route.id
+                    ListItem(
+                        headlineContent = { 
+                            Text(
+                                route.name ?: "Unnamed Route",
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                            ) 
+                        },
+                        leadingContent = { 
+                            Icon(Icons.Filled.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) 
+                        },
+                        supportingContent = if (isCurrent) { { Text("Current location") } } else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isCurrent) {
+                                onSelectDestination(route.id)
+                            }
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

@@ -70,6 +70,12 @@ class DashboardViewModel(
         updateCustomer(customer)
     }
 
+    fun updateRouteGroup(routeGroup: RouteGroup) {
+        launchSafe {
+            routeGroupRepository.update(routeGroup)
+        }
+    }
+
     fun updateRouteSortOrder(routeGroup: RouteGroup, newOrder: Int) {
         routeGroup.sortOrder = newOrder
         launchSafe { routeGroupRepository.update(routeGroup) }
