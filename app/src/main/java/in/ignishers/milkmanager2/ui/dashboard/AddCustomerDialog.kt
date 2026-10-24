@@ -9,8 +9,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import `in`.ignishers.milkmanager2.R
 import `in`.ignishers.milkmanager2.models.Customer
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -33,7 +35,7 @@ fun AddCustomerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initialCustomer == null) "Add Customer" else "Edit Customer") },
+        title = { Text(if (initialCustomer == null) stringResource(R.string.add_customer) else stringResource(R.string.edit_customer)) },
         text = {
             Column(
                 modifier = Modifier
@@ -44,19 +46,19 @@ fun AddCustomerDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.name)) },
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 OutlinedTextField(
                     value = mobile,
                     onValueChange = { mobile = it },
-                    label = { Text("Mobile Number") },
+                    label = { Text(stringResource(R.string.mobile_number)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                Text("Entry Mode", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(R.string.entry_mode), style = MaterialTheme.typography.labelLarge)
                 Row(
                     modifier = Modifier.selectableGroup(),
                     verticalAlignment = Alignment.CenterVertically
@@ -65,16 +67,16 @@ fun AddCustomerDialog(
                         selected = entryMode == "Liters",
                         onClick = { entryMode = "Liters" }
                     )
-                    Text("Liters", modifier = Modifier.padding(end = 16.dp))
+                    Text(stringResource(R.string.liters), modifier = Modifier.padding(end = 16.dp))
 
                     RadioButton(
                         selected = entryMode == "Rupees",
                         onClick = { entryMode = "Rupees" }
                     )
-                    Text("Rupees")
+                    Text(stringResource(R.string.rupees))
                 }
 
-                val mLabel = if (entryMode == "Liters") "Morning (Liters)" else "Morning (₹)"
+                val mLabel = if (entryMode == "Liters") stringResource(R.string.morning_liters) else stringResource(R.string.morning_rupees)
                 OutlinedTextField(
                     value = morningQtyStr,
                     onValueChange = { morningQtyStr = it },
@@ -83,7 +85,7 @@ fun AddCustomerDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                val eLabel = if (entryMode == "Liters") "Evening (Liters)" else "Evening (₹)"
+                val eLabel = if (entryMode == "Liters") stringResource(R.string.evening_liters) else stringResource(R.string.evening_rupees)
                 OutlinedTextField(
                     value = eveningQtyStr,
                     onValueChange = { eveningQtyStr = it },
@@ -95,7 +97,7 @@ fun AddCustomerDialog(
                 OutlinedTextField(
                     value = openingDueStr,
                     onValueChange = { openingDueStr = it },
-                    label = { Text(if (initialCustomer == null) "Opening Due (₹)" else "Current Due (₹)") },
+                    label = { Text(if (initialCustomer == null) stringResource(R.string.opening_due_rupees) else stringResource(R.string.current_due_rupees)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -136,12 +138,12 @@ fun AddCustomerDialog(
                 },
                 enabled = name.isNotBlank()
             ) {
-                Text("Save")
+                Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )

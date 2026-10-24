@@ -20,6 +20,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.SimpleDateFormat
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Date
@@ -368,6 +369,14 @@ class PointOfSaleViewModel(
             customerRepository.update(cust)
             _customer.value = customerRepository.getCustomerById(cust.id ?: return@launchSafe)
         }
+    }
+
+    suspend fun getMonthlyBillReport(yearMonth: YearMonth): BillReportData? {
+        val start = yearMonth.atDay(1).toString()
+        val end = yearMonth.atEndOfMonth().toString()
+        val title = yearMonth.format(DateTimeFormatter.ofPattern("MMMM yyyy"))
+        val isPastMonth = yearMonth.isBefore(YearMonth.now())
+        return generateBillReport(start, end, title, isLastMonth = isPastMonth)
     }
 
     suspend fun generateBillReport(

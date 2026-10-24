@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,6 +13,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -28,9 +30,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import `in`.ignishers.milkmanager2.R
 import org.koin.androidx.compose.koinViewModel
 import java.math.BigDecimal
 import java.util.Calendar
@@ -45,6 +50,7 @@ import androidx.compose.ui.window.DialogProperties
 import `in`.ignishers.milkmanager2.models.Customer
 import java.math.RoundingMode
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import `in`.ignishers.milkmanager2.utils.PDFGenerator
 import kotlinx.coroutines.launch
@@ -85,7 +91,20 @@ fun PointOfSaleScreen(
     var showDefaultQtyDialog by remember { mutableStateOf(false) }
     var showBillDialog by remember { mutableStateOf(false) }
     var statementPreviewData by remember { mutableStateOf<BillReportData?>(null) }
+    var currentViewingMonth by remember { mutableStateOf<YearMonth?>(null) }
     val coroutineScope = rememberCoroutineScope()
+
+    val openBillForMonth: (YearMonth) -> Unit = { ym ->
+        currentViewingMonth = ym
+        coroutineScope.launch {
+            val report = viewModel.getMonthlyBillReport(ym)
+            if (report != null) {
+                statementPreviewData = report
+            } else {
+                Toast.makeText(context, context.getString(R.string.could_not_load_bill, ym.format(DateTimeFormatter.ofPattern("MMMM yyyy"))), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -109,7 +128,7 @@ fun PointOfSaleScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
@@ -145,7 +164,7 @@ fun PointOfSaleScreen(
                         IconButton(onClick = { showOverflowMenu = true }) {
                             Icon(
                                 imageVector = Icons.Filled.MoreVert,
-                                contentDescription = "Menu Options",
+                                contentDescription = stringResource(R.string.options),
                                 tint = MaterialTheme.colorScheme.onPrimary
                             )
                         }
@@ -154,14 +173,21 @@ fun PointOfSaleScreen(
                             onDismissRequest = { showOverflowMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Default Quantity", fontWeight = FontWeight.Medium) },
+                                text = { Text(stringResource(R.string.default_quantity), fontWeight = FontWeight.Medium) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showDefaultQtyDialog = true
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Bill", fontWeight = FontWeight.Medium) },
+                                text = { Text(stringResource(R.string.bill_current_month), fontWeight = FontWeight.Medium) },
+                                onClick = {
+                                    showOverflowMenu = false
+                                    openBillForMonth(YearMonth.now())
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.custom_statement_reports), fontWeight = FontWeight.Medium) },
                                 onClick = {
                                     showOverflowMenu = false
                                     showBillDialog = true
@@ -198,15 +224,13 @@ fun PointOfSaleScreen(
                         },
                         onDragEnd = {
                             if (totalDragX < -swipeThreshold) {
-                                val error = viewModel.navigateCustomer(isNext = true)
-                                if (error != null) {
-                                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
-                                }
+                                // Left swipe -> Next Month Bill
+                                val target = (currentViewingMonth ?: YearMonth.now()).plusMonths(1)
+                                openBillForMonth(target)
                             } else if (totalDragX > swipeThreshold) {
-                                val error = viewModel.navigateCustomer(isNext = false)
-                                if (error != null) {
-                                    Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
-                                }
+                                // Right swipe -> Previous Month Bill
+                                val target = (currentViewingMonth ?: YearMonth.now()).minusMonths(1)
+                                openBillForMonth(target)
                             }
                             totalDragX = 0f
                         },
@@ -220,6 +244,8 @@ fun PointOfSaleScreen(
                     )
                 }
         ) {
+            var cardDragY by remember { mutableFloatStateOf(0f) }
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -229,7 +255,25 @@ fun PointOfSaleScreen(
             ) {
             // Customer Due & Balance Info Card
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures(
+                            onDragStart = { cardDragY = 0f },
+                            onDragEnd = {
+                                if (cardDragY > 40f) {
+                                    openBillForMonth(YearMonth.now())
+                                }
+                                cardDragY = 0f
+                            },
+                            onDragCancel = { cardDragY = 0f },
+                            onVerticalDrag = { _, dragAmount ->
+                                if (dragAmount > 0) {
+                                    cardDragY += dragAmount
+                                }
+                            }
+                        )
+                    },
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
             ) {
@@ -241,7 +285,7 @@ fun PointOfSaleScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Mobile No", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.mobile_no), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 text = customer?.mobile?.takeIf { it.isNotBlank() } ?: "-",
                                 style = MaterialTheme.typography.titleMedium,
@@ -249,7 +293,7 @@ fun PointOfSaleScreen(
                             )
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("Total Due", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.total_due), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 text = "₹${customer?.currentDue ?: BigDecimal.ZERO}",
                                 style = MaterialTheme.typography.titleMedium,
@@ -264,14 +308,14 @@ fun PointOfSaleScreen(
                         color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                     )
 
-                    // Last Month Due & Pay Button Row
+                    // Last Month Due, Bill Button & Pay Button Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text("Last Month Due", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(stringResource(R.string.last_month_due), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             Text(
                                 text = if (lastMonthDue > BigDecimal.ZERO) "₹$lastMonthDue" else "₹0",
                                 style = MaterialTheme.typography.titleMedium,
@@ -279,13 +323,51 @@ fun PointOfSaleScreen(
                                 color = if (lastMonthDue > BigDecimal.ZERO) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                             )
                         }
-                        Button(
-                            onClick = { showPaymentDialog = true },
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
-                        ) {
-                            Text("Pay", fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { openBillForMonth(YearMonth.now()) },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.DateRange,
+                                    contentDescription = stringResource(R.string.bill),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stringResource(R.string.bill), fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { showPaymentDialog = true },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                            ) {
+                                Text(stringResource(R.string.pay), fontWeight = FontWeight.Bold)
+                            }
                         }
+                    }
+
+                    // Swipe down hint / Quick bill tap
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp)
+                            .clickable { openBillForMonth(YearMonth.now()) },
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Filled.KeyboardArrowDown,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Swipe down or tap for Current Month Bill",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
                     }
                 }
             }
@@ -372,7 +454,7 @@ fun PointOfSaleScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.Center
                                 ) {
-                                    Text("Quick Qty", fontWeight = FontWeight.SemiBold)
+                                    Text(stringResource(R.string.quick_qty), fontWeight = FontWeight.SemiBold)
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Icon(Icons.Filled.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(18.dp))
                                 }
@@ -397,7 +479,7 @@ fun PointOfSaleScreen(
                                         onClick = {
                                             showQuickMenu = false
                                             viewModel.addQuickEntry(key)
-                                            Toast.makeText(context, "Added $label entry", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, context.getString(R.string.added_entry, label), Toast.LENGTH_SHORT).show()
                                         }
                                     )
                                 }
@@ -412,7 +494,7 @@ fun PointOfSaleScreen(
                         ) {
                             Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Manual Entry", fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.manual_entry), fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -640,7 +722,7 @@ fun PointOfSaleScreen(
             onDismiss = { showManualEntrySheet = false },
             onSave = { date, entrySession, entryType, value ->
                 viewModel.addManualEntry(date, entrySession, entryType, value)
-                Toast.makeText(context, "Manual entry saved!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.manual_entry_saved), Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -658,7 +740,7 @@ fun PointOfSaleScreen(
             onDismiss = { showPaymentDialog = false },
             onSave = { amount, mode, date ->
                 viewModel.addPayment(amount, mode, date)
-                Toast.makeText(context, "Payment of ₹$amount recorded!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.payment_recorded, amount.toPlainString()), Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -667,7 +749,7 @@ fun PointOfSaleScreen(
     if (itemToDelete != null) {
         AlertDialog(
             onDismissRequest = { itemToDelete = null },
-            title = { Text("Delete Entry?", fontWeight = FontWeight.Bold) },
+            title = { Text(stringResource(R.string.delete_entry_title), fontWeight = FontWeight.Bold) },
             text = {
                 val message = when (val item = itemToDelete) {
                     is TodayHistoryItem.Milk -> "Are you sure you want to delete this milk transaction of ${item.transaction.quantity}L (₹${item.transaction.amount})? Customer due balance will be reduced by ₹${item.transaction.amount}."
@@ -682,11 +764,11 @@ fun PointOfSaleScreen(
                         when (val item = itemToDelete) {
                             is TodayHistoryItem.Milk -> {
                                 viewModel.deleteMilkTransaction(item.transaction)
-                                Toast.makeText(context, "Milk entry deleted", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.milk_entry_deleted), Toast.LENGTH_SHORT).show()
                             }
                             is TodayHistoryItem.Pay -> {
                                 viewModel.deletePayment(item.payment)
-                                Toast.makeText(context, "Payment entry deleted", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, context.getString(R.string.payment_entry_deleted), Toast.LENGTH_SHORT).show()
                             }
                             null -> {}
                         }
@@ -694,12 +776,12 @@ fun PointOfSaleScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Delete", fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.delete), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { itemToDelete = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         )
@@ -714,7 +796,7 @@ fun PointOfSaleScreen(
             onUpdate = { morningQty, eveningQty ->
                 viewModel.updateDefaultQuantities(morningQty, eveningQty)
                 showDefaultQtyDialog = false
-                Toast.makeText(context, "Default quantities updated", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.default_quantities_updated), Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -738,11 +820,11 @@ fun PointOfSaleScreen(
                             }
                             BillAction.SAVE -> {
                                 val file = PDFGenerator.generateCustomerMonthlyPDF(context, reportData)
-                                Toast.makeText(context, "Saved to ${file.name}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(context, context.getString(R.string.saved_to_file, file.name), Toast.LENGTH_LONG).show()
                             }
                         }
                     } else {
-                        Toast.makeText(context, "No records found for this period", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.no_records_found), Toast.LENGTH_SHORT).show()
                     }
                 }
             }
@@ -753,18 +835,27 @@ fun PointOfSaleScreen(
     if (statementPreviewData != null) {
         StatementPreviewDialog(
             reportData = statementPreviewData!!,
-            onDismiss = { statementPreviewData = null },
+            onDismiss = {
+                statementPreviewData = null
+                currentViewingMonth = null
+            },
             onShare = {
                 val file = PDFGenerator.generateCustomerMonthlyPDF(context, statementPreviewData!!)
                 PDFGenerator.shareFile(context, file)
             },
             onSave = {
                 val file = PDFGenerator.generateCustomerMonthlyPDF(context, statementPreviewData!!)
-                Toast.makeText(context, "Saved to ${file.name}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(R.string.saved_to_file, file.name), Toast.LENGTH_LONG).show()
             },
             onOpenPdf = {
                 val file = PDFGenerator.generateCustomerMonthlyPDF(context, statementPreviewData!!)
                 PDFGenerator.openFile(context, file)
+            },
+            onNavigateMonth = { isNext ->
+                val targetMonth = (currentViewingMonth ?: YearMonth.now()).let {
+                    if (isNext) it.plusMonths(1) else it.minusMonths(1)
+                }
+                openBillForMonth(targetMonth)
             }
         )
     }
@@ -827,22 +918,22 @@ fun ManualEntryBottomSheet(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(10.dp))
-                        Text("Date: $selectedDate", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.date_label, selectedDate), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     }
-                    Text("Change Date", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.change_date), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
             }
 
             // Session Selection
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SessionButton(
-                    text = "Morning",
+                    text = stringResource(R.string.morning),
                     isSelected = selectedSession == "Morning",
                     onClick = { selectedSession = "Morning" },
                     modifier = Modifier.weight(1f)
                 )
                 SessionButton(
-                    text = "Evening",
+                    text = stringResource(R.string.evening),
                     isSelected = selectedSession == "Evening",
                     onClick = { selectedSession = "Evening" },
                     modifier = Modifier.weight(1f)
@@ -851,7 +942,7 @@ fun ManualEntryBottomSheet(
 
             // Entry Type Selection (Only one can be selected)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Entry Type", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.entry_type), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -859,19 +950,19 @@ fun ManualEntryBottomSheet(
                     FilterChip(
                         selected = selectedEntryType == "Litres",
                         onClick = { selectedEntryType = "Litres" },
-                        label = { Text("Litres") },
+                        label = { Text(stringResource(R.string.litres)) },
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
                         selected = selectedEntryType == "ml",
                         onClick = { selectedEntryType = "ml" },
-                        label = { Text("ml") },
+                        label = { Text(stringResource(R.string.ml)) },
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
                         selected = selectedEntryType == "Rupee",
                         onClick = { selectedEntryType = "Rupee" },
-                        label = { Text("Rupee (₹)") },
+                        label = { Text(stringResource(R.string.rupee_symbol)) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -947,7 +1038,7 @@ fun ManualEntryBottomSheet(
                     .height(52.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("SAVE ENTRY", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.save_entry), fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -967,13 +1058,13 @@ fun RecordPaymentDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Record Payment", fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(R.string.record_payment), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
-                    label = { Text("Payment Amount (₹)") },
+                    label = { Text(stringResource(R.string.payment_amount)) },
                     prefix = { Text("₹ ") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -986,13 +1077,13 @@ fun RecordPaymentDialog(
                     FilterChip(
                         selected = paymentMode == "Cash",
                         onClick = { paymentMode = "Cash" },
-                        label = { Text("Cash") },
+                        label = { Text(stringResource(R.string.cash)) },
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
                         selected = paymentMode == "UPI",
                         onClick = { paymentMode = "UPI" },
-                        label = { Text("UPI") },
+                        label = { Text(stringResource(R.string.upi)) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -1009,12 +1100,12 @@ fun RecordPaymentDialog(
                 },
                 enabled = amountText.toBigDecimalOrNull()?.let { it > BigDecimal.ZERO } == true
             ) {
-                Text("Save Payment")
+                Text(stringResource(R.string.save_payment))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
@@ -1077,7 +1168,7 @@ fun DefaultQuantityDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Default Milk Quantity", fontWeight = FontWeight.Bold) },
+        title = { Text(stringResource(R.string.default_milk_quantity), fontWeight = FontWeight.Bold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
@@ -1100,7 +1191,7 @@ fun DefaultQuantityDialog(
                             onClick = { switchUnit("Litres") }
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Litres", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.litres), style = MaterialTheme.typography.bodyMedium)
                     }
 
                     Spacer(modifier = Modifier.width(24.dp))
@@ -1114,7 +1205,7 @@ fun DefaultQuantityDialog(
                             onClick = { switchUnit("Rupees") }
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Rupees", style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.rupees), style = MaterialTheme.typography.bodyMedium)
                     }
                 }
 
@@ -1129,7 +1220,7 @@ fun DefaultQuantityDialog(
                 OutlinedTextField(
                     value = morningText,
                     onValueChange = { morningText = it },
-                    label = { Text(if (selectedUnit == "Litres") "Morning Milk (L)" else "Morning Amount (₹)") },
+                    label = { Text(if (selectedUnit == "Litres") stringResource(R.string.morning_liters) else stringResource(R.string.morning_rupees)) },
                     prefix = { Text(if (selectedUnit == "Litres") "L " else "₹ ") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -1140,7 +1231,7 @@ fun DefaultQuantityDialog(
                 OutlinedTextField(
                     value = eveningText,
                     onValueChange = { eveningText = it },
-                    label = { Text(if (selectedUnit == "Litres") "Evening Milk (L)" else "Evening Amount (₹)") },
+                    label = { Text(if (selectedUnit == "Litres") stringResource(R.string.evening_liters) else stringResource(R.string.evening_rupees)) },
                     prefix = { Text(if (selectedUnit == "Litres") "L " else "₹ ") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     singleLine = true,
@@ -1166,12 +1257,12 @@ fun DefaultQuantityDialog(
                     onUpdate(mFinal, eFinal)
                 }
             ) {
-                Text("Update", fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.update), fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
@@ -1281,7 +1372,7 @@ fun BillDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text("Generate Bill & Statement", fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.generate_bill_statement), fontWeight = FontWeight.Bold)
         },
         text = {
             Column(
@@ -1302,7 +1393,7 @@ fun BillDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = customer.name ?: "Customer",
+                                text = customer.name ?: stringResource(R.string.customer),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -1337,7 +1428,7 @@ fun BillDialog(
                             onClick = { isLastMonthSelected = true }
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Last Month", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.last_month), fontWeight = FontWeight.SemiBold)
                     }
 
                     Spacer(modifier = Modifier.width(20.dp))
@@ -1351,7 +1442,7 @@ fun BillDialog(
                             onClick = { isLastMonthSelected = false }
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Custom", fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(R.string.custom), fontWeight = FontWeight.SemiBold)
                     }
                 }
 
@@ -1381,7 +1472,7 @@ fun BillDialog(
                     // Custom Configuration Box
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         // Report Type Dropdown
-                        Text("Report Type", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
+                        Text(stringResource(R.string.report_type), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedButton(
                                 onClick = { reportTypeExpanded = true },
@@ -1572,7 +1663,7 @@ fun BillDialog(
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text("From", style = MaterialTheme.typography.labelSmall)
+                                            Text(stringResource(R.string.from_date), style = MaterialTheme.typography.labelSmall)
                                             Text(customStartDate, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                                         }
                                     }
@@ -1581,7 +1672,7 @@ fun BillDialog(
                                         modifier = Modifier.weight(1f)
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Text("To", style = MaterialTheme.typography.labelSmall)
+                                            Text(stringResource(R.string.to_date), style = MaterialTheme.typography.labelSmall)
                                             Text(customEndDate, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
                                         }
                                     }
@@ -1603,7 +1694,7 @@ fun BillDialog(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                     ) {
-                        Text("View", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.view), fontWeight = FontWeight.Bold)
                     }
 
                     FilledTonalButton(
@@ -1611,7 +1702,7 @@ fun BillDialog(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                     ) {
-                        Text("Share", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.share), fontWeight = FontWeight.Bold)
                     }
 
                     Button(
@@ -1619,7 +1710,7 @@ fun BillDialog(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                     ) {
-                        Text("Save", fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.save), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -1627,7 +1718,7 @@ fun BillDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
@@ -1639,10 +1730,15 @@ fun StatementPreviewDialog(
     onDismiss: () -> Unit,
     onShare: () -> Unit,
     onSave: () -> Unit,
-    onOpenPdf: () -> Unit
+    onOpenPdf: () -> Unit,
+    onNavigateMonth: ((Boolean) -> Unit)? = null
 ) {
     var selectedMonthIndex by remember { mutableIntStateOf(0) }
     val currentMonthData = reportData.months.getOrNull(selectedMonthIndex) ?: reportData.months.firstOrNull()
+
+    val density = LocalDensity.current
+    val swipeThreshold = remember(density) { with(density) { 50.dp.toPx() } }
+    var dialogDragX by remember { mutableFloatStateOf(0f) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -1650,8 +1746,36 @@ fun StatementPreviewDialog(
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth(0.96f)
-                .fillMaxHeight(0.92f),
+                .fillMaxWidth(0.98f)
+                .fillMaxHeight(0.95f)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { dialogDragX = 0f },
+                        onDragEnd = {
+                            if (dialogDragX < -swipeThreshold) {
+                                // Left swipe -> Next Month
+                                if (onNavigateMonth != null) {
+                                    onNavigateMonth(true)
+                                } else if (selectedMonthIndex < reportData.months.size - 1) {
+                                    selectedMonthIndex++
+                                }
+                            } else if (dialogDragX > swipeThreshold) {
+                                // Right swipe -> Prev Month
+                                if (onNavigateMonth != null) {
+                                    onNavigateMonth(false)
+                                } else if (selectedMonthIndex > 0) {
+                                    selectedMonthIndex--
+                                }
+                            }
+                            dialogDragX = 0f
+                        },
+                        onDragCancel = { dialogDragX = 0f },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            dialogDragX += dragAmount
+                        }
+                    )
+                },
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp
@@ -1659,7 +1783,7 @@ fun StatementPreviewDialog(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(14.dp)
+                    .padding(12.dp)
             ) {
                 // Header
                 Row(
@@ -1674,7 +1798,7 @@ fun StatementPreviewDialog(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = reportData.title,
+                            text = currentMonthData?.monthTitle ?: reportData.title,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1684,37 +1808,50 @@ fun StatementPreviewDialog(
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
-                // Month Switcher (if more than 1 month)
-                if (reportData.months.size > 1) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                // Month Switcher (Left/Right Month Navigation)
+                val canGoPrev = onNavigateMonth != null || selectedMonthIndex > 0
+                val canGoNext = onNavigateMonth != null || selectedMonthIndex < reportData.months.size - 1
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            if (onNavigateMonth != null) {
+                                onNavigateMonth(false)
+                            } else if (selectedMonthIndex > 0) {
+                                selectedMonthIndex--
+                            }
+                        },
+                        enabled = canGoPrev
                     ) {
-                        IconButton(
-                            onClick = { if (selectedMonthIndex > 0) selectedMonthIndex-- },
-                            enabled = selectedMonthIndex > 0
-                        ) {
-                            Text("◀", fontWeight = FontWeight.Bold)
-                        }
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Previous Month")
+                    }
 
-                        Text(
-                            text = currentMonthData?.monthTitle ?: "",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                    Text(
+                        text = currentMonthData?.monthTitle ?: reportData.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
 
-                        IconButton(
-                            onClick = { if (selectedMonthIndex < reportData.months.size - 1) selectedMonthIndex++ },
-                            enabled = selectedMonthIndex < reportData.months.size - 1
-                        ) {
-                            Text("▶", fontWeight = FontWeight.Bold)
-                        }
+                    IconButton(
+                        onClick = {
+                            if (onNavigateMonth != null) {
+                                onNavigateMonth(true)
+                            } else if (selectedMonthIndex < reportData.months.size - 1) {
+                                selectedMonthIndex++
+                            }
+                        },
+                        enabled = canGoNext
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "Next Month")
                     }
                 }
 
@@ -1730,16 +1867,16 @@ fun StatementPreviewDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Opening Due: ₹${currentMonthData.openingBalance}", style = MaterialTheme.typography.bodySmall)
-                                Text("Milk: ${currentMonthData.totalMilk} L (₹${currentMonthData.totalBill})", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                Text(stringResource(R.string.opening_due_format, currentMonthData.openingBalance.toPlainString()), style = MaterialTheme.typography.bodySmall)
+                                Text(stringResource(R.string.milk_bill_format, currentMonthData.totalMilk.toPlainString(), currentMonthData.totalBill.toPlainString()), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Month Paid: ₹${currentMonthData.paidInMonth}", style = MaterialTheme.typography.bodySmall, color = Color(0xFF10B981))
+                                Text(stringResource(R.string.month_paid_format, currentMonthData.paidInMonth.toPlainString()), style = MaterialTheme.typography.bodySmall, color = Color(0xFF10B981))
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Final Due: ", style = MaterialTheme.typography.bodySmall)
+                                    Text(stringResource(R.string.final_due), style = MaterialTheme.typography.bodySmall)
                                     Text(
                                         text = "₹${currentMonthData.finalDue}",
                                         style = MaterialTheme.typography.bodySmall,
@@ -1774,9 +1911,9 @@ fun StatementPreviewDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Table Header
+                // 16 * 16 Table Header (Date, Morning, Evening, Payment on Left & Right)
                 Surface(
                     color = MaterialTheme.colorScheme.primary,
                     shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp),
@@ -1785,51 +1922,48 @@ fun StatementPreviewDialog(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                            .padding(horizontal = 2.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Date",
-                            modifier = Modifier.weight(0.9f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
+                        DayHalfHeader(modifier = Modifier.weight(1f))
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(16.dp)
+                                .background(MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f))
                         )
-                        Text(
-                            text = "Morning",
-                            modifier = Modifier.weight(1.3f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Text(
-                            text = "Evening",
-                            modifier = Modifier.weight(1.3f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                        Text(
-                            text = "Payment",
-                            modifier = Modifier.weight(1.1f),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
+                        DayHalfHeader(modifier = Modifier.weight(1f))
                     }
                 }
 
-                // Table Rows
-                val scrollState = rememberScrollState()
+                // 16 * 16 Table Rows
+                val tableScrollState = rememberScrollState()
+                val daysMap = remember(currentMonthData) {
+                    currentMonthData?.days?.associateBy { it.day } ?: emptyMap()
+                }
+                val daysInMonth = remember(currentMonthData) {
+                    currentMonthData?.days?.size ?: 31
+                }
+
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .verticalScroll(scrollState)
+                        .verticalScroll(tableScrollState)
                 ) {
-                    val daysList = currentMonthData?.days ?: emptyList()
-                    daysList.forEachIndexed { index, day ->
-                        val rowBg = if (index % 2 == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                    for (i in 1..16) {
+                        val leftDay = i
+                        val rightDay = i + 16
+
+                        val leftItem = daysMap[leftDay]
+                        val rightItem = if (rightDay <= daysInMonth) daysMap[rightDay] else null
+
+                        val rowBg = if (i % 2 == 0) {
+                            MaterialTheme.colorScheme.surface
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                        }
+
                         Surface(
                             color = rowBg,
                             modifier = Modifier.fillMaxWidth()
@@ -1837,55 +1971,37 @@ fun StatementPreviewDialog(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    .padding(horizontal = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = String.format(Locale.US, "%02d", day.day),
-                                    modifier = Modifier.weight(0.9f),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold
+                                DayHalfRow(
+                                    dayNum = leftDay,
+                                    dayItem = leftItem,
+                                    modifier = Modifier.weight(1f)
                                 )
-
-                                Text(
-                                    text = if (day.mornQty > BigDecimal.ZERO || day.mornAmt > BigDecimal.ZERO) {
-                                        "${day.mornQty}L\n₹${day.mornAmt}"
-                                    } else {
-                                        "-"
-                                    },
-                                    modifier = Modifier.weight(1.3f),
-                                    style = MaterialTheme.typography.bodySmall
+                                Box(
+                                    modifier = Modifier
+                                        .width(1.dp)
+                                        .height(34.dp)
+                                        .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                                 )
-
-                                Text(
-                                    text = if (day.eveQty > BigDecimal.ZERO || day.eveAmt > BigDecimal.ZERO) {
-                                        "${day.eveQty}L\n₹${day.eveAmt}"
-                                    } else {
-                                        "-"
-                                    },
-                                    modifier = Modifier.weight(1.3f),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-
-                                Text(
-                                    text = if (day.paymentAmt > BigDecimal.ZERO) {
-                                        "₹${day.paymentAmt}"
-                                    } else {
-                                        "-"
-                                    },
-                                    modifier = Modifier.weight(1.1f),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = if (day.paymentAmt > BigDecimal.ZERO) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (day.paymentAmt > BigDecimal.ZERO) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurface
+                                DayHalfRow(
+                                    dayNum = if (rightDay <= daysInMonth) rightDay else null,
+                                    dayItem = rightItem,
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
+                        HorizontalDivider(
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)
+                        )
                     }
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp))
 
-                // Bottom Action Buttons: PDF View, Share, Save, Close
+                // Bottom Action Buttons: PDF View, Share, Save
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1896,7 +2012,7 @@ fun StatementPreviewDialog(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                     ) {
-                        Text("PDF View", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.pdf_view), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
 
                     FilledTonalButton(
@@ -1904,7 +2020,7 @@ fun StatementPreviewDialog(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                     ) {
-                        Text("Share", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.share), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
 
                     Button(
@@ -1912,10 +2028,109 @@ fun StatementPreviewDialog(
                         modifier = Modifier.weight(1f),
                         contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp)
                     ) {
-                        Text("Save", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.save), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DayHalfHeader(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.padding(horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = stringResource(R.string.date),
+            modifier = Modifier.weight(0.7f),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+        Text(
+            text = stringResource(R.string.morning),
+            modifier = Modifier.weight(1.2f),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+        Text(
+            text = stringResource(R.string.evening),
+            modifier = Modifier.weight(1.2f),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+        Text(
+            text = stringResource(R.string.payment),
+            modifier = Modifier.weight(1.1f),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+    }
+}
+
+@Composable
+private fun DayHalfRow(
+    dayNum: Int?,
+    dayItem: DayStatementItem?,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.padding(vertical = 3.dp, horizontal = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = dayNum?.let { String.format(Locale.US, "%02d", it) } ?: "-",
+            modifier = Modifier.weight(0.7f),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+            fontWeight = FontWeight.Bold,
+            color = if (dayNum != null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+        )
+        Text(
+            text = if (dayItem != null && (dayItem.mornQty > BigDecimal.ZERO || dayItem.mornAmt > BigDecimal.ZERO)) {
+                val q = dayItem.mornQty.stripTrailingZeros().toPlainString()
+                val a = dayItem.mornAmt.setScale(0, RoundingMode.HALF_UP).toPlainString()
+                "${q}L\n₹$a"
+            } else "-",
+            modifier = Modifier.weight(1.2f),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+            color = if (dayItem != null && (dayItem.mornQty > BigDecimal.ZERO || dayItem.mornAmt > BigDecimal.ZERO)) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+            }
+        )
+        Text(
+            text = if (dayItem != null && (dayItem.eveQty > BigDecimal.ZERO || dayItem.eveAmt > BigDecimal.ZERO)) {
+                val q = dayItem.eveQty.stripTrailingZeros().toPlainString()
+                val a = dayItem.eveAmt.setScale(0, RoundingMode.HALF_UP).toPlainString()
+                "${q}L\n₹$a"
+            } else "-",
+            modifier = Modifier.weight(1.2f),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+            color = if (dayItem != null && (dayItem.eveQty > BigDecimal.ZERO || dayItem.eveAmt > BigDecimal.ZERO)) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+            }
+        )
+        Text(
+            text = if (dayItem != null && dayItem.paymentAmt > BigDecimal.ZERO) {
+                val p = dayItem.paymentAmt.setScale(0, RoundingMode.HALF_UP).toPlainString()
+                "₹$p"
+            } else "-",
+            modifier = Modifier.weight(1.1f),
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+            fontWeight = if (dayItem != null && dayItem.paymentAmt > BigDecimal.ZERO) FontWeight.Bold else FontWeight.Normal,
+            color = if (dayItem != null && dayItem.paymentAmt > BigDecimal.ZERO) {
+                Color(0xFF10B981)
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+            }
+        )
     }
 }

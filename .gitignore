@@ -30,3 +30,5 @@ output-metadata.json
 SupabaseConfig.java
 
 .kotlin/
+
+/data/

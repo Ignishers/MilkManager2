@@ -10,6 +10,7 @@ import android.graphics.pdf.PdfDocument
 import android.os.Environment
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import `in`.ignishers.milkmanager2.R
 import `in`.ignishers.milkmanager2.models.Customer
 import `in`.ignishers.milkmanager2.models.DailyTransaction
 import `in`.ignishers.milkmanager2.models.Payment
@@ -511,9 +512,9 @@ class PDFGenerator(
                     putExtra(Intent.EXTRA_STREAM, uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                context.startActivity(Intent.createChooser(intent, "Share Milk Bill PDF"))
+                context.startActivity(Intent.createChooser(intent, context.getString(R.string.share_bill_pdf_title)))
             } catch (e: Exception) {
-                Toast.makeText(context, "Error sharing PDF: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.error_sharing_pdf, e.localizedMessage ?: ""), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -526,7 +527,7 @@ class PDFGenerator(
                 }
                 context.startActivity(intent)
             } catch (e: Exception) {
-                Toast.makeText(context, "No PDF viewer app found on device", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.no_pdf_viewer), Toast.LENGTH_SHORT).show()
             }
         }
     }

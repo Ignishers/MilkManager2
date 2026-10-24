@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import `in`.ignishers.milkmanager2.R
 import `in`.ignishers.milkmanager2.models.RouteGroup
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -18,13 +20,13 @@ fun AddRouteDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Route Group") },
+        title = { Text(stringResource(R.string.add_route_group)) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = routeName,
                     onValueChange = { routeName = it },
-                    label = { Text("Route Name (e.g. Area, Colony, Street)") },
+                    label = { Text(stringResource(R.string.route_name_label)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -43,12 +45,12 @@ fun AddRouteDialog(
                 },
                 enabled = routeName.isNotBlank()
             ) {
-                Text("Save")
+                Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )
