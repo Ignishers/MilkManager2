@@ -28,3 +28,7 @@ output-metadata.json
 
 # Secrets
 SupabaseConfig.java
+
+.kotlin/
+
+/data/

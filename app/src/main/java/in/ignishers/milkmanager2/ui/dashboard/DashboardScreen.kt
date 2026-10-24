@@ -10,10 +10,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import `in`.ignishers.milkmanager2.utils.dragAndDrop
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Settings
@@ -34,9 +33,11 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.koin.androidx.compose.koinViewModel
+import `in`.ignishers.milkmanager2.R
 import `in`.ignishers.milkmanager2.models.Customer
 import `in`.ignishers.milkmanager2.models.RouteGroup
 import java.math.BigDecimal
@@ -56,18 +57,24 @@ fun DashboardScreen(
     val allRouteGroups by viewModel.routeGroups.collectAsState()
     val totalRevenue by viewModel.totalRevenue.collectAsState()
     val totalMilk by viewModel.totalMilk.collectAsState()
+    val isAutoEntryMasterEnabled by viewModel.isAutoEntryMasterEnabled.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.checkPendingAutoEntries(context)
+    }
     
     var showAddCustomerDialog by remember { mutableStateOf(false) }
     var customerToEdit by remember { mutableStateOf<Customer?>(null) }
     
     var showAddRouteDialog by remember { mutableStateOf(false) }
-    var isReorderMode by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var showMilkPriceDialog by remember { mutableStateOf(false) }
     
     // Action Menu States
     var selectedCustomerForAction by remember { mutableStateOf<Customer?>(null) }
     var selectedRouteForAction by remember { mutableStateOf<RouteGroup?>(null) }
+    var customerToMove by remember { mutableStateOf<Customer?>(null) }
+    var routeToMove by remember { mutableStateOf<RouteGroup?>(null) }
     
     var isFabExpanded by remember { mutableStateOf(false) }
     val fabRotation by animateFloatAsState(targetValue = if (isFabExpanded) 45f else 0f)
@@ -80,7 +87,8 @@ fun DashboardScreen(
         val custs = customers.filter { it.routeGroupId == currentRouteId }.sortedBy { it.sortOrder ?: 0 }
         uiItems = routes + custs
     }
-    val currentRouteName = allRouteGroups.find { it.id == currentRouteId }?.name ?: "Milk Manager"
+    val defaultAppName = stringResource(R.string.app_name)
+    val currentRouteName = allRouteGroups.find { it.id == currentRouteId }?.name ?: defaultAppName
 
     if (showAddCustomerDialog || customerToEdit != null) {
         AddCustomerDialog(
@@ -121,7 +129,7 @@ fun DashboardScreen(
             onSave = { newRate ->
                 viewModel.saveMilkRate(newRate)
                 showMilkPriceDialog = false
-                Toast.makeText(context, "Milk Price Updated!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.milk_price_updated), Toast.LENGTH_SHORT).show()
             }
         )
     }
@@ -130,14 +138,14 @@ fun DashboardScreen(
         ModalBottomSheet(onDismissRequest = { selectedCustomerForAction = null }) {
             Column(modifier = Modifier.padding(bottom = 32.dp)) {
                 Text(
-                    text = "Manage ${selectedCustomerForAction?.name}",
+                    text = stringResource(R.string.manage_item, selectedCustomerForAction?.name ?: ""),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(16.dp),
                     fontWeight = FontWeight.Bold
                 )
                 HorizontalDivider()
                 ListItem(
-                    headlineContent = { Text("Edit Customer") },
+                    headlineContent = { Text(stringResource(R.string.edit_customer)) },
                     leadingContent = { Icon(Icons.Filled.Edit, contentDescription = null) },
                     modifier = Modifier.clickable {
                         customerToEdit = selectedCustomerForAction
@@ -145,20 +153,20 @@ fun DashboardScreen(
                     }
                 )
                 ListItem(
-                    headlineContent = { Text("Move to Route") },
+                    headlineContent = { Text(stringResource(R.string.move_to_route)) },
                     leadingContent = { Icon(Icons.Filled.ArrowForward, contentDescription = null) },
                     modifier = Modifier.clickable {
-                        Toast.makeText(context, "Move feature coming soon", Toast.LENGTH_SHORT).show()
+                        customerToMove = selectedCustomerForAction
                         selectedCustomerForAction = null
                     }
                 )
                 ListItem(
-                    headlineContent = { Text("Delete Customer", color = MaterialTheme.colorScheme.error) },
+                    headlineContent = { Text(stringResource(R.string.delete_customer), color = MaterialTheme.colorScheme.error) },
                     leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                     modifier = Modifier.clickable {
                         val c = selectedCustomerForAction!!
                         if (c.currentDue != null && c.currentDue!! > BigDecimal.ZERO) {
-                            Toast.makeText(context, "Cannot delete: Customer has pending due!", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, context.getString(R.string.cannot_delete_customer_due), Toast.LENGTH_LONG).show()
                         } else {
                             viewModel.deleteCustomer(c)
                         }
@@ -173,21 +181,29 @@ fun DashboardScreen(
         ModalBottomSheet(onDismissRequest = { selectedRouteForAction = null }) {
             Column(modifier = Modifier.padding(bottom = 32.dp)) {
                 Text(
-                    text = "Manage ${selectedRouteForAction?.name}",
+                    text = stringResource(R.string.manage_item, selectedRouteForAction?.name ?: ""),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(16.dp),
                     fontWeight = FontWeight.Bold
                 )
                 HorizontalDivider()
                 ListItem(
-                    headlineContent = { Text("Delete Route", color = MaterialTheme.colorScheme.error) },
+                    headlineContent = { Text(stringResource(R.string.move_route)) },
+                    leadingContent = { Icon(Icons.Filled.ArrowForward, contentDescription = null) },
+                    modifier = Modifier.clickable {
+                        routeToMove = selectedRouteForAction
+                        selectedRouteForAction = null
+                    }
+                )
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.delete_route), color = MaterialTheme.colorScheme.error) },
                     leadingContent = { Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
                     modifier = Modifier.clickable {
                         val route = selectedRouteForAction!!
                         val hasSubRoutes = allRouteGroups.any { it.parentId == route.id }
                         val hasCustomers = customers.any { it.routeGroupId == route.id }
                         if (hasSubRoutes || hasCustomers) {
-                            Toast.makeText(context, "Cannot delete: Route is not empty!", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, context.getString(R.string.cannot_delete_route_not_empty), Toast.LENGTH_LONG).show()
                         } else {
                             viewModel.deleteRouteGroup(route)
                         }
@@ -198,6 +214,61 @@ fun DashboardScreen(
         }
     }
 
+    if (customerToMove != null) {
+        val customer = customerToMove!!
+        val customerLabel = customer.name ?: stringResource(R.string.customer)
+        MoveItemDialog(
+            title = stringResource(R.string.move_title, customerLabel),
+            currentParentId = customer.routeGroupId,
+            availableRoutes = allRouteGroups,
+            onDismiss = { customerToMove = null },
+            onSelectDestination = { targetRouteId ->
+                val maxSort = customers.filter { it.routeGroupId == targetRouteId }.maxOfOrNull { it.sortOrder ?: 0 } ?: -1
+                customer.sortOrder = maxSort + 1
+                customer.routeGroupId = targetRouteId
+                viewModel.updateCustomer(customer)
+                val targetName = allRouteGroups.find { it.id == targetRouteId }?.name ?: context.getString(R.string.main_dashboard)
+                Toast.makeText(context, context.getString(R.string.moved_item_to, customer.name ?: "", targetName), Toast.LENGTH_SHORT).show()
+                customerToMove = null
+            }
+        )
+    }
+
+    if (routeToMove != null) {
+        val route = routeToMove!!
+        val descendantIds = remember(route.id, allRouteGroups) {
+            val descendants = mutableSetOf<Long>()
+            fun findChildren(parentId: Long) {
+                allRouteGroups.filter { it.parentId == parentId }.forEach { child ->
+                    child.id?.let { cid ->
+                        if (descendants.add(cid)) {
+                            findChildren(cid)
+                        }
+                    }
+                }
+            }
+            route.id?.let { findChildren(it) }
+            descendants
+        }
+        val availableRoutes = allRouteGroups.filter { it.id != route.id && it.id !in descendantIds }
+        val routeLabel = route.name ?: stringResource(R.string.route)
+        MoveItemDialog(
+            title = stringResource(R.string.move_title, routeLabel),
+            currentParentId = route.parentId,
+            availableRoutes = availableRoutes,
+            onDismiss = { routeToMove = null },
+            onSelectDestination = { targetParentId ->
+                val maxSort = allRouteGroups.filter { it.parentId == targetParentId }.maxOfOrNull { it.sortOrder ?: 0 } ?: -1
+                route.sortOrder = maxSort + 1
+                route.parentId = targetParentId
+                viewModel.updateRouteGroup(route)
+                val targetName = allRouteGroups.find { it.id == targetParentId }?.name ?: context.getString(R.string.main_dashboard)
+                Toast.makeText(context, context.getString(R.string.moved_item_to, route.name ?: "", targetName), Toast.LENGTH_SHORT).show()
+                routeToMove = null
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -205,20 +276,45 @@ fun DashboardScreen(
                 navigationIcon = {
                     if (currentRouteId != null) {
                         IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                         }
                     }
                 },
                 actions = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Text(
+                            text = "Auto",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Switch(
+                            checked = isAutoEntryMasterEnabled,
+                            onCheckedChange = { enabled ->
+                                viewModel.setAutoEntryMasterEnabled(context, enabled)
+                                Toast.makeText(
+                                    context,
+                                    if (enabled) "Master Auto Entry ON (5:00 AM & 4:00 PM)" else "Master Auto Entry OFF",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = MaterialTheme.colorScheme.primary,
+                                checkedTrackColor = MaterialTheme.colorScheme.onPrimary,
+                                checkedBorderColor = MaterialTheme.colorScheme.onPrimary,
+                                uncheckedThumbColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                                uncheckedTrackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f),
+                                uncheckedBorderColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
+                            )
+                        )
+                    }
                     Box {
-                        IconButton(onClick = { 
-                            if (isReorderMode) {
-                                isReorderMode = false 
-                            } else {
-                                showMenu = true
-                            }
-                        }) {
-                            Icon(if (isReorderMode) Icons.Filled.Check else Icons.Filled.MoreVert, contentDescription = "Menu")
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.menu))
                         }
                         
                         DropdownMenu(
@@ -226,15 +322,7 @@ fun DashboardScreen(
                             onDismissRequest = { showMenu = false }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Reorder List") },
-                                onClick = { 
-                                    isReorderMode = true
-                                    showMenu = false 
-                                },
-                                leadingIcon = { Icon(Icons.Filled.List, contentDescription = null) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Update Milk Price") },
+                                text = { Text(stringResource(R.string.update_milk_price)) },
                                 onClick = { 
                                     showMilkPriceDialog = true
                                     showMenu = false 
@@ -242,15 +330,15 @@ fun DashboardScreen(
                                 leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Sales Records") },
+                                text = { Text(stringResource(R.string.sales_records)) },
                                 onClick = { 
-                                    Toast.makeText(context, "Sales Records Coming Soon!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, context.getString(R.string.sales_records_coming_soon), Toast.LENGTH_SHORT).show()
                                     showMenu = false 
                                 },
                                 leadingIcon = { Icon(Icons.Filled.List, contentDescription = null) }
                             )
                             DropdownMenuItem(
-                                text = { Text("Settings") },
+                                text = { Text(stringResource(R.string.settings)) },
                                 onClick = { 
                                     onNavigateToSettings()
                                     showMenu = false 
@@ -284,7 +372,7 @@ fun DashboardScreen(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
-                            Text("New Route", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.new_route), modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelLarge)
                         }
                         FloatingActionButton(
                             onClick = { 
@@ -294,7 +382,7 @@ fun DashboardScreen(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Filled.LocationOn, contentDescription = "Add Route")
+                            Icon(Icons.Filled.LocationOn, contentDescription = stringResource(R.string.add_route))
                         }
                     }
                 }
@@ -310,7 +398,7 @@ fun DashboardScreen(
                             color = MaterialTheme.colorScheme.surfaceVariant,
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
-                            Text("New Customer", modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.new_customer), modifier = Modifier.padding(8.dp), style = MaterialTheme.typography.labelLarge)
                         }
                         FloatingActionButton(
                             onClick = { 
@@ -320,7 +408,7 @@ fun DashboardScreen(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer,
                             modifier = Modifier.size(48.dp)
                         ) {
-                            Icon(Icons.Filled.Person, contentDescription = "Add Customer")
+                            Icon(Icons.Filled.Person, contentDescription = stringResource(R.string.add_customer))
                         }
                     }
                 }
@@ -331,7 +419,7 @@ fun DashboardScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Add,
-                        contentDescription = "Expand",
+                        contentDescription = stringResource(R.string.expand),
                         modifier = Modifier.rotate(fabRotation)
                     )
                 }
@@ -370,17 +458,46 @@ fun DashboardScreen(
                         .padding(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Total Milk", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
-                            Text("${totalMilk.toPlainString()} L", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(stringResource(R.string.total_milk), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                                Text("${totalMilk.toPlainString()} L", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(stringResource(R.string.revenue), color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
+                                Text("₹${totalRevenue.toPlainString()}", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            }
                         }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Revenue", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.labelLarge)
-                            Text("₹${totalRevenue.toPlainString()}", color = MaterialTheme.colorScheme.onPrimaryContainer, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 12.dp),
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (isAutoEntryMasterEnabled) stringResource(R.string.auto_daily_entry_active) else stringResource(R.string.auto_daily_entry_inactive),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = if (isAutoEntryMasterEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Text(
+                                    text = if (isAutoEntryMasterEnabled) stringResource(R.string.active) else stringResource(R.string.disabled),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isAutoEntryMasterEnabled) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -388,7 +505,7 @@ fun DashboardScreen(
 
             if (uiItems.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No entries found. Click + to add.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.no_entries_found), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 val saveSortOrder: () -> Unit = {
@@ -422,7 +539,6 @@ fun DashboardScreen(
                         if (item is RouteGroup) {
                             RouteCard(
                                 routeGroup = item,
-                                isReorderMode = isReorderMode,
                                 canMoveUp = !isFirstOfType,
                                 canMoveDown = !isLastOfType,
                                 onMoveUp = {
@@ -437,13 +553,12 @@ fun DashboardScreen(
                                     uiItems = mutableItems
                                     saveSortOrder()
                                 },
-                                onClick = { if (!isReorderMode) onNavigateToRoute(item.id!!) },
-                                onLongClick = { if (!isReorderMode) selectedRouteForAction = item }
+                                onClick = { onNavigateToRoute(item.id!!) },
+                                onLongClick = { selectedRouteForAction = item }
                             )
                         } else if (item is Customer) {
                             CustomerCard(
                                 customer = item,
-                                isReorderMode = isReorderMode,
                                 canMoveUp = !isFirstOfType,
                                 canMoveDown = !isLastOfType,
                                 onMoveUp = {
@@ -458,8 +573,8 @@ fun DashboardScreen(
                                     uiItems = mutableItems
                                     saveSortOrder()
                                 },
-                                onClick = { if (!isReorderMode) onNavigateToPos(item.id!!) },
-                                onLongClick = { if (!isReorderMode) selectedCustomerForAction = item }
+                                onClick = { onNavigateToPos(item.id!!) },
+                                onLongClick = { selectedCustomerForAction = item }
                             )
                         }
                     }
@@ -473,7 +588,6 @@ fun DashboardScreen(
 @Composable
 fun RouteCard(
     routeGroup: RouteGroup, 
-    isReorderMode: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onMoveUp: () -> Unit,
@@ -492,30 +606,34 @@ fun RouteCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp).fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Filled.LocationOn, contentDescription = "Route", tint = MaterialTheme.colorScheme.onSecondaryContainer)
+            Icon(Icons.Filled.LocationOn, contentDescription = stringResource(R.string.route), tint = MaterialTheme.colorScheme.onSecondaryContainer)
             Spacer(modifier = Modifier.width(16.dp))
             Text(
-                text = routeGroup.name ?: "Unnamed Route",
+                text = routeGroup.name ?: stringResource(R.string.unnamed_route),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.weight(1f)
             )
-            Spacer(modifier = Modifier.weight(1f))
             
-            if (isReorderMode) {
-                Row {
-                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move Up")
-                    }
-                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move Down")
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp, 
+                        contentDescription = stringResource(R.string.move_up),
+                        tint = if (canMoveUp) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
+                    )
                 }
-            } else {
-                Icon(Icons.Filled.Menu, contentDescription = "Drag Handle", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown, 
+                        contentDescription = stringResource(R.string.move_down),
+                        tint = if (canMoveDown) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.3f)
+                    )
+                }
             }
         }
     }
@@ -525,7 +643,6 @@ fun RouteCard(
 @Composable
 fun CustomerCard(
     customer: Customer,
-    isReorderMode: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     onMoveUp: () -> Unit,
@@ -543,45 +660,118 @@ fun CustomerCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp), 
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(
-                    text = customer.name ?: "Unknown",
+                    text = customer.name ?: stringResource(R.string.unknown_customer),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    if (!customer.mobile.isNullOrBlank()) {
-                        Text(
-                            text = customer.mobile!!,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (customer.currentDue != null && customer.currentDue!! > BigDecimal.ZERO) {
-                        Text(
-                            text = "Due: ₹${customer.currentDue}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
+                Spacer(modifier = Modifier.width(8.dp))
+                val due = customer.currentDue ?: BigDecimal.ZERO
+                Text(
+                    text = stringResource(R.string.due_format, due.toPlainString()),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (due > BigDecimal.ZERO) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            if (isReorderMode) {
-                Row {
-                    IconButton(onClick = onMoveUp, enabled = canMoveUp) {
-                        Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move Up")
-                    }
-                    IconButton(onClick = onMoveDown, enabled = canMoveDown) {
-                        Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move Down")
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onMoveUp, enabled = canMoveUp, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowUp, 
+                        contentDescription = stringResource(R.string.move_up),
+                        tint = if (canMoveUp) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
                 }
-            } else {
-                Icon(Icons.Filled.Menu, contentDescription = "Drag Handle", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                IconButton(onClick = onMoveDown, enabled = canMoveDown, modifier = Modifier.size(36.dp)) {
+                    Icon(
+                        Icons.Filled.KeyboardArrowDown, 
+                        contentDescription = stringResource(R.string.move_down),
+                        tint = if (canMoveDown) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+fun MoveItemDialog(
+    title: String,
+    currentParentId: Long?,
+    availableRoutes: List<RouteGroup>,
+    onDismiss: () -> Unit,
+    onSelectDestination: (Long?) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title, fontWeight = FontWeight.Bold) },
+        text = {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 350.dp)
+            ) {
+                item {
+                    val isCurrent = currentParentId == null
+                    ListItem(
+                        headlineContent = { 
+                            Text(
+                                stringResource(R.string.main_dashboard_root), 
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                            ) 
+                        },
+                        leadingContent = { 
+                            Icon(Icons.Filled.Home, contentDescription = null, tint = MaterialTheme.colorScheme.primary) 
+                        },
+                        supportingContent = if (isCurrent) { { Text(stringResource(R.string.current_location)) } } else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isCurrent) {
+                                onSelectDestination(null)
+                            }
+                    )
+                    HorizontalDivider()
+                }
+
+                items(availableRoutes) { route ->
+                    val isCurrent = currentParentId == route.id
+                    ListItem(
+                        headlineContent = { 
+                            Text(
+                                route.name ?: stringResource(R.string.unnamed_route),
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal
+                            ) 
+                        },
+                        leadingContent = { 
+                            Icon(Icons.Filled.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) 
+                        },
+                        supportingContent = if (isCurrent) { { Text(stringResource(R.string.current_location)) } } else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = !isCurrent) {
+                                onSelectDestination(route.id)
+                            }
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
 }

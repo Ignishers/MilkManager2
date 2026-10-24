@@ -1,31 +1,198 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="512"
     android:viewportHeight="512">
-    
-    <!-- Material M Group: Centered in 512x512 canvas -->
-    <!-- Matches ic_app_logo exactly -->
+
+    <!-- Ambient Lights -->
+    <path
+        android:pathData="M256,135 A145,145 0 1,1 255.9,135 Z"
+        android:fillColor="#2438BDF8" />
+    <path
+        android:pathData="M345,265 A85,85 0 1,1 344.9,265 Z"
+        android:fillColor="#1FF59E0B" />
+
+    <!-- Bottle Glass Body with Gradient -->
+    <path
+        android:strokeWidth="3.5"
+        android:pathData="M214,135 L298,135 L298,172 C298,198 332,218 332,245 L332,382 C332,408 312,422 286,422 L226,422 C200,422 180,408 180,382 L180,245 C180,218 214,198 214,172 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="180"
+                android:startY="135"
+                android:endX="332"
+                android:endY="422"
+                android:type="linear">
+                <item android:color="#52FFFFFF" android:offset="0.0" />
+                <item android:color="#14FFFFFF" android:offset="0.45" />
+                <item android:color="#4093C5FD" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="180"
+                android:startY="135"
+                android:endX="332"
+                android:endY="422"
+                android:type="linear">
+                <item android:color="#F2FFFFFF" android:offset="0.0" />
+                <item android:color="#4DFFFFFF" android:offset="0.4" />
+                <item android:color="#B360A5FA" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Bottle Cap -->
+    <path
+        android:fillColor="#FFF1F5F9"
+        android:pathData="M216,110 h80 a8,8 0 0,1 8,8 v9 a8,8 0 0,1 -8,8 h-80 a8,8 0 0,1 -8,-8 v-9 a8,8 0 0,1 8,-8 z" />
+    <path
+        android:fillColor="#E6FFFFFF"
+        android:pathData="M216.5,112 h79 a2.5,2.5 0 0,1 2.5,2.5 v0 a2.5,2.5 0 0,1 -2.5,2.5 h-79 a2.5,2.5 0 0,1 -2.5,-2.5 v0 a2.5,2.5 0 0,1 2.5,-2.5 z" />
+    <path
+        android:fillColor="#FFCBD5E1"
+        android:pathData="M210,128 h92 a2,2 0 0,1 2,2 v3 a2,2 0 0,1 -2,2 h-92 a2,2 0 0,1 -2,-2 v-3 a2,2 0 0,1 2,-2 z" />
+
+    <!-- Milk Fill (Inside Bottle Clip) -->
     <group>
-         <!-- Left Pillar -->
-         <path 
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M112,168 a40,40 0 0 1 80,0 v176 a40,40 0 0 1 -80,0 z" />
+        <clip-path android:pathData="M214,135 L298,135 L298,172 C298,198 332,218 332,245 L332,382 C332,408 312,422 286,422 L226,422 C200,422 180,408 180,382 L180,245 C180,218 214,198 214,172 Z" />
+        
+        <!-- Milk Body -->
+        <path
+            android:pathData="M175,258 Q216,242 256,256 T336,256 L336,430 L175,430 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="256"
+                    android:startY="256"
+                    android:endX="256"
+                    android:endY="430"
+                    android:type="linear">
+                    <item android:color="#FFFFFFFF" android:offset="0.0" />
+                    <item android:color="#FFF8FAFC" android:offset="0.75" />
+                    <item android:color="#FFE2E8F0" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
 
-        <!-- Right Pillar -->
-        <path 
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M320,168 a40,40 0 0 1 80,0 v176 a40,40 0 0 1 -80,0 z" />
-
-        <!-- Center Drape -->
+        <!-- Cream Wave -->
         <path
             android:fillColor="#FFFFFFFF"
-            android:pathData="M152 160 Q 256 300, 360 160 L 360 210 Q 256 380, 152 210 Z"/>
+            android:pathData="M175,258 Q216,242 256,256 T336,256 L336,264 Q296,250 256,264 T175,264 Z" />
 
-        <!-- Spark Accent -->
+        <!-- Bottom Depth Shadow -->
         <path
-            android:fillColor="#FF2DD4BF"
-            android:pathData="M256,92 L284,120 L256,148 L228,120 Z"/>
+            android:fillColor="#4094A3B8"
+            android:pathData="M256,407 A65,9 0 1,1 255.9,407 Z" />
+
+        <!-- Scale Notches -->
+        <path
+            android:strokeColor="#9994A3B8"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:pathData="M195,295 L218,295" />
+        <path
+            android:strokeColor="#9994A3B8"
+            android:strokeWidth="2.5"
+            android:strokeLineCap="round"
+            android:pathData="M195,330 L212,330" />
+        <path
+            android:strokeColor="#9994A3B8"
+            android:strokeWidth="3"
+            android:strokeLineCap="round"
+            android:pathData="M195,365 L218,365" />
     </group>
+
+    <!-- Glass Surface Highlights -->
+    <path
+        android:strokeColor="#A6FFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:pathData="M192,245 L192,375 C192,392 198,404 208,408" />
+    <path
+        android:strokeColor="#D9FFFFFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round"
+        android:pathData="M220,178 C204,192 194,216 193,238" />
+
+    <!-- ================= 3D GOLD RUPEE COIN ================= -->
+    <group
+        android:translateX="344"
+        android:translateY="340">
+        
+        <!-- Outer Contrast Ring -->
+        <path
+            android:fillColor="#FF0F172A"
+            android:pathData="M0,-54 A54,54 0 1,1 -0.1,-54 Z" />
+
+        <!-- Gold Coin Rim -->
+        <path
+            android:pathData="M0,-50 A50,50 0 1,1 -0.1,-50 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="-35"
+                    android:startY="-35"
+                    android:endX="35"
+                    android:endY="35"
+                    android:type="linear">
+                    <item android:color="#FFFEF08A" android:offset="0.0" />
+                    <item android:color="#FFB45309" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Gold Coin Face -->
+        <path
+            android:pathData="M0,-44 A44,44 0 1,1 -0.1,-44 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="-31"
+                    android:startY="-31"
+                    android:endX="31"
+                    android:endY="31"
+                    android:type="linear">
+                    <item android:color="#FFFDE047" android:offset="0.0" />
+                    <item android:color="#FFF59E0B" android:offset="0.4" />
+                    <item android:color="#FFD97706" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Inner Bevel Circle -->
+        <path
+            android:strokeColor="#BFFFF08A"
+            android:strokeWidth="1.8"
+            android:pathData="M0,-40 A40,40 0 1,1 -0.1,-40 Z" />
+
+        <!-- Rupee Symbol 3D Shadow -->
+        <group
+            android:translateY="2.5">
+            <path
+                android:fillColor="#7378350F"
+                android:pathData="M-17.37,-14.00 H-0.99 Q-1.28,-15.16 -1.94,-16.09 Q-2.61,-17.03 -3.82,-17.69 Q-5.02,-18.36 -6.80,-18.72 Q-8.59,-19.08 -11.03,-19.08 H-17.41 L-17.37,-25.81 H17.30 V-19.08 H7.54 Q8.59,-18.07 9.25,-16.81 Q9.92,-15.55 10.13,-14.00 H17.41 V-7.27 H9.92 Q9.49,-5.47 8.44,-3.89 Q7.40,-2.30 5.80,-1.03 Q4.19,0.25 2.12,1.17 Q0.05,2.09 -2.43,2.56 V2.70 Q-1.13,3.28 -0.07,4.03 Q0.99,4.79 1.98,5.80 Q2.97,6.80 3.94,8.10 Q4.91,9.40 6.07,11.02 L16.36,25.81 H4.01 L-4.19,12.96 Q-5.38,11.09 -6.44,9.68 Q-7.51,8.28 -8.71,7.34 Q-9.92,6.41 -11.38,5.92 Q-12.83,5.44 -14.78,5.44 H-17.37 V-2.16 H-11.07 Q-9.23,-2.16 -7.58,-2.54 Q-5.92,-2.92 -4.61,-3.60 Q-3.29,-4.28 -2.38,-5.22 Q-1.46,-6.16 -1.06,-7.27 H-17.37 Z" />
+        </group>
+
+        <!-- Official Authentic Indian Rupee Symbol (₹) -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M-17.37,-14.00 H-0.99 Q-1.28,-15.16 -1.94,-16.09 Q-2.61,-17.03 -3.82,-17.69 Q-5.02,-18.36 -6.80,-18.72 Q-8.59,-19.08 -11.03,-19.08 H-17.41 L-17.37,-25.81 H17.30 V-19.08 H7.54 Q8.59,-18.07 9.25,-16.81 Q9.92,-15.55 10.13,-14.00 H17.41 V-7.27 H9.92 Q9.49,-5.47 8.44,-3.89 Q7.40,-2.30 5.80,-1.03 Q4.19,0.25 2.12,1.17 Q0.05,2.09 -2.43,2.56 V2.70 Q-1.13,3.28 -0.07,4.03 Q0.99,4.79 1.98,5.80 Q2.97,6.80 3.94,8.10 Q4.91,9.40 6.07,11.02 L16.36,25.81 H4.01 L-4.19,12.96 Q-5.38,11.09 -6.44,9.68 Q-7.51,8.28 -8.71,7.34 Q-9.92,6.41 -11.38,5.92 Q-12.83,5.44 -14.78,5.44 H-17.37 V-2.16 H-11.07 Q-9.23,-2.16 -7.58,-2.54 Q-5.92,-2.92 -4.61,-3.60 Q-3.29,-4.28 -2.38,-5.22 Q-1.46,-6.16 -1.06,-7.27 H-17.37 Z" />
+
+        <!-- Specular Highlight Sparkle -->
+        <path
+            android:fillColor="#D9FFFFFF"
+            android:pathData="M-18,-22.5 A4.5,4.5 0 1,1 -18.1,-22.5 Z" />
+    </group>
+
+    <!-- Droplets Accents -->
+    <path
+        android:fillColor="#E6FFFFFF"
+        android:pathData="M145,196 A9,9 0 1,1 144.9,196 Z" />
+    <path
+        android:fillColor="#E638BDF8"
+        android:pathData="M132,175 A5,5 0 1,1 131.9,175 Z" />
+    <path
+        android:fillColor="#BFFFFFFF"
+        android:pathData="M370,164 A6,6 0 1,1 369.9,164 Z" />
+
 </vector>

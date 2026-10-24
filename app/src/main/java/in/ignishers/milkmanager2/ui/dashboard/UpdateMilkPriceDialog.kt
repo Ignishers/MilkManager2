@@ -5,8 +5,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import `in`.ignishers.milkmanager2.R
 import `in`.ignishers.milkmanager2.models.MilkRate
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
@@ -26,19 +28,19 @@ fun UpdateMilkPriceDialog(
     var showDatePicker by remember { mutableStateOf(false) }
 
     val formatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
-    val selectedDateStr = datePickerState.selectedDateMillis?.let { formatter.format(Date(it)) } ?: "Select Date"
+    val selectedDateStr = datePickerState.selectedDateMillis?.let { formatter.format(Date(it)) } ?: stringResource(R.string.select_date)
 
     if (showDatePicker) {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("OK")
+                    Text(stringResource(R.string.ok))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDatePicker = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.cancel))
                 }
             }
         ) {
@@ -48,7 +50,7 @@ fun UpdateMilkPriceDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Update Milk Price") },
+        title = { Text(stringResource(R.string.update_milk_price)) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -57,7 +59,7 @@ fun UpdateMilkPriceDialog(
                 OutlinedTextField(
                     value = priceStr,
                     onValueChange = { priceStr = it },
-                    label = { Text("Price per Liter (₹)") },
+                    label = { Text(stringResource(R.string.price_per_liter)) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -66,7 +68,7 @@ fun UpdateMilkPriceDialog(
                     onClick = { showDatePicker = true },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Effective Date: $selectedDateStr")
+                    Text(stringResource(R.string.effective_date, selectedDateStr))
                 }
             }
         },
@@ -85,12 +87,12 @@ fun UpdateMilkPriceDialog(
                 },
                 enabled = priceStr.toBigDecimalOrNull()?.let { it > BigDecimal.ZERO } == true
             ) {
-                Text("Save")
+                Text(stringResource(R.string.save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.cancel))
             }
         }
     )

@@ -4,19 +4,31 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import `in`.ignishers.milkmanager2.R
 import `in`.ignishers.milkmanager2.database.AppDatabase
+import `in`.ignishers.milkmanager2.database.AppSettingsRepository
 import `in`.ignishers.milkmanager2.utils.CsvExportManager
 import `in`.ignishers.milkmanager2.utils.CsvImportManager
+import `in`.ignishers.milkmanager2.utils.LocaleHelper
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -24,9 +36,13 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val db = AppDatabase.getDatabase(context)
-    val exportManager = CsvExportManager(context, db)
-    val importManager = CsvImportManager(context, db)
+    val db = remember { AppDatabase.getDatabase(context) }
+    val exportManager = remember { CsvExportManager(context, db) }
+    val importManager = remember { CsvImportManager(context, db) }
+    val appSettingsRepo = remember { AppSettingsRepository(db.appSettingsDao()) }
+
+    var selectedLangCode by remember { mutableStateOf(LocaleHelper.getSelectedLanguageCode()) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     // Export Launcher
     val exportLauncher = rememberLauncherForActivityResult(
@@ -36,9 +52,9 @@ fun SettingsScreen(onBack: () -> Unit) {
             coroutineScope.launch {
                 val result = exportManager.exportCustomersToCsv(it)
                 if (result.isSuccess) {
-                    Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.export_success), Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(context, "Export failed.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.export_failed), Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -52,21 +68,28 @@ fun SettingsScreen(onBack: () -> Unit) {
             coroutineScope.launch {
                 val result = importManager.importCustomersFromCsv(it)
                 if (result.isSuccess) {
-                    Toast.makeText(context, "Imported ${result.getOrNull()} customers!", Toast.LENGTH_SHORT).show()
+                    val count = result.getOrNull() ?: 0
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.import_success, count),
+                        Toast.LENGTH_SHORT
+                    ).show()
                 } else {
-                    Toast.makeText(context, "Import failed.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.import_failed), Toast.LENGTH_SHORT).show()
                 }
             }
         }
     }
 
+    val currentLanguageItem = LocaleHelper.getLanguageByCode(selectedLangCode)
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.settings), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -84,30 +107,227 @@ fun SettingsScreen(onBack: () -> Unit) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Language Selection Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Data Migration", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_language),
+                            contentDescription = stringResource(R.string.language),
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Column {
+                            Text(
+                                text = stringResource(R.string.language),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = stringResource(R.string.choose_language),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Interactive language selector button/surface
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showLanguageDialog = true },
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    text = currentLanguageItem.nativeName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = currentLanguageItem.englishName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            FilledTonalButton(
+                                onClick = { showLanguageDialog = true }
+                            ) {
+                                Text(stringResource(R.string.select_language))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Data Migration Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.data_migration),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Button(
                         onClick = { exportLauncher.launch("customers_export.csv") },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Export Data to CSV")
+                        Text(stringResource(R.string.export_csv))
                     }
-                    
+
                     OutlinedButton(
-                        onClick = { importLauncher.launch(arrayOf("text/comma-separated-values", "text/csv", "*/*")) },
+                        onClick = {
+                            importLauncher.launch(
+                                arrayOf("text/comma-separated-values", "text/csv", "*/*")
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Import Data from CSV")
+                        Text(stringResource(R.string.import_csv))
                     }
                 }
             }
+        }
+
+        // Language Selection Dialog
+        if (showLanguageDialog) {
+            AlertDialog(
+                onDismissRequest = { showLanguageDialog = false },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_language),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = stringResource(R.string.select_language),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                },
+                text = {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(LocaleHelper.SUPPORTED_LANGUAGES) { lang ->
+                            val isSelected = lang.code.equals(selectedLangCode, ignoreCase = true)
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        selectedLangCode = lang.code
+                                        LocaleHelper.setLocale(lang.code)
+                                        coroutineScope.launch {
+                                            appSettingsRepo.setLanguage(lang.code)
+                                        }
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(
+                                                R.string.language_changed_toast,
+                                                "${lang.nativeName} (${lang.englishName})"
+                                            ),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        showLanguageDialog = false
+                                    },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                } else {
+                                    MaterialTheme.colorScheme.surface
+                                }
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = isSelected,
+                                        onClick = {
+                                            selectedLangCode = lang.code
+                                            LocaleHelper.setLocale(lang.code)
+                                            coroutineScope.launch {
+                                                appSettingsRepo.setLanguage(lang.code)
+                                            }
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(
+                                                    R.string.language_changed_toast,
+                                                    "${lang.nativeName} (${lang.englishName})"
+                                                ),
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            showLanguageDialog = false
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = lang.nativeName,
+                                            fontSize = 17.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = lang.englishName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showLanguageDialog = false }) {
+                        Text(stringResource(R.string.cancel))
+                    }
+                }
+            )
         }
     }
 }
